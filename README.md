@@ -1,6 +1,6 @@
 # gLMs + PPI + XAI
 
-## Login
+## Log into cluster
 
 ```
 ssh [username]@login12.scicore.unibas.ch
