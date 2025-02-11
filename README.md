@@ -1,4 +1,4 @@
-# Project: gLMs + PPI + XAI
+# gLMs + PPI + XAI
 
 ## Login
 
