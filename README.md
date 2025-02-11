@@ -9,7 +9,6 @@ ssh [username]@login12.scicore.unibas.ch
 ## Set up conda environment
 
 ```
-
 conda create -n gLM python=3.9
 
 conda activate gLM
