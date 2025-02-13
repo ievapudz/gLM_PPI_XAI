@@ -1,25 +1,38 @@
 from Bio import SeqIO
 
 class Processor:
-    def __init__(self, file_path):
-        self.file_path = file_path
+    def __init__(self, fasta_path, pair_list_path):
+        self.fasta_path = fasta_path
+        self.pair_list_path = pair_list_path
 
     def load_fasta(self):
         headers = []
         seqs = []
-        with open(self.file_path, "r") as fh:
+        with open(self.fasta_path, "r") as fh:
             for record in SeqIO.parse(fh, "fasta"):
                 headers.append(record.id)
                 seqs.append(str(record.seq))
         fasta = dict(zip(headers, seqs))
         return fasta
     
-    def process_pair(self, prot1, prot2, fasta_dict, aa_only=True):
-        pair_id = f"{prot1.replace('-', '_')}-{prot2.replace('-', '_')}"
-        if(aa_only): concat_seq = f"<+>{fasta_dict[prot1]}<+>{fasta_dict[prot2]}"
+    def load_pair_list(self):
+        pairs = []
+        with open(self.pair_list_path, 'r') as file:
+            for line in file:
+                pair = line.strip()
+                if pair:
+                    pairs.append(pair)
+        return pairs
+    
+    def process_pair(self, pair, fasta_dict, aa_only=True):
+        pair = pair.split()
+        pair_id = f"{pair[0].replace('_', '-')}_{pair[1].replace('_', '-')}"
+        if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
         return (pair_id, concat_seq)
 
-proc = Processor("../data/Bernett2022/human_swissprot_oneliner.fasta")
+proc = Processor("../data/Bernett2022/human_swissprot_oneliner.fasta", "../data/Bernett2022/Intra2_pos_rr.txt")
 fasta_dict = proc.load_fasta()
-id, seq = proc.process_pair("O15121", "P54886", fasta_dict)
+
+pairs = proc.load_pair_list()
+id, seq = proc.process_pair(pairs[0], fasta_dict)
 print(id, seq)
