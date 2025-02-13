@@ -7,15 +7,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize, LinearSegmentedColormap, to_hex
+from optparse import OptionParser
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from matplotlib.colors import to_hex
 
-#@markdown ## Flags
-fast = False # @param {type:"boolean"}
-#@markdown - only perturb the `mask` token
+parser = OptionParser()
 
-#@markdown ## setup gLM2_650M
+parser.add_option("--fast", "-f", dest="fast",
+	default=False, action="store_true", 
+    help="option to run the fast mode of categorical Jacobian computation.")
+
+(options, args) = parser.parse_args()
+
+fast = options.fast 
+
 import os
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
