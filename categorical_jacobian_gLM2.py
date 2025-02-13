@@ -24,7 +24,7 @@ MODEL_PATH = "./gLM2_650M" # on cluster
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 NUC_TOKENS = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
-AA_TOKENS = tuple(range(4,24)) # 20 amino acids
+AA_TOKENS = tuple(range(4, 24)) # 20 amino acids
 NUM_TOKENS = len(AA_TOKENS) + len(NUC_TOKENS)
 
 model = AutoModelForMaskedLM.from_pretrained(MODEL_PATH, trust_remote_code=True).eval().to(DEVICE)
@@ -132,7 +132,8 @@ def get_categorical_jacobian(sequence: str, fast: bool = False):
     is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(AA_TOKENS)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
 
     input_ids = input_ids.unsqueeze(0).to(DEVICE)
-    with torch.no_grad(), torch.cuda.amp.autocast(enabled=True):
+
+    with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
         f = lambda x:model(x)[0][..., all_tokens].cpu().float()
 
         x = torch.clone(input_ids).to(DEVICE)
