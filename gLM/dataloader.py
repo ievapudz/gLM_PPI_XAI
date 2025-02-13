@@ -1,0 +1,93 @@
+from pytorch_lightning import LightningDataModule
+from torch.utils.data import DataLoader, Dataset
+import pandas as pnd
+from Bio import SeqIO
+from data_process.Processor import Processor
+from pathlib import Path
+
+class SequencePairDataset(Dataset):
+    """
+    torch Dataset for sequence pairs
+    """
+
+    def __init__(
+        self,
+        fasta_file,
+        data_file,
+        num_samples: int = None,
+    ):
+        self.processor = Processor(fasta_file, data_file)
+        # TODO: update Processor module to read the TSV file with binary labels
+        if num_samples is not None:
+            self.data = pnd.read_csv(data_file, sep="\t").head(num_samples)
+        else:
+            self.data = pnd.read_csv(data_file, sep="\t")
+        print(
+            "Num positive pairs:",
+            len(self.data[self.data["label"] == 1]),
+            "Num negative pairs:",
+            len(self.data[self.data["label"] == 0]),
+        )
+        self.fasta_file = fasta_file
+        self.fasta_dict = self.processor.load_fasta()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        """
+        item is a concatenated sequence of the pair
+        """
+        row = self.data.iloc[idx].to_dict()
+        # TODO: use Processor module to return a concatenated and processed sequence of the pair
+        #self.processor.process_pair(self, pair, fasta_dict, aa_only=True)   
+        return
+
+
+class SequencePairDataModule(LightningDataModule):
+    """
+    LightningDataModule for SequencePairDataset
+    """
+
+    def __init__(
+        self,
+        fasta_file,
+        data_folder,
+        batch_size: int,
+        positive_only: bool = False,
+        num_workers: int = 1,
+        num_samples: int = None,
+    ):
+        super().__init__()
+        self.fasta_file = Path(fasta_file)
+        self.data_folder = Path(data_folder)
+        self.test_file = self.data_folder / "test.txt"
+        self.batch_size = batch_size
+        self.positive_only = positive_only
+        self.num_workers = num_workers
+        self.num_samples = num_samples
+
+    def setup(self, stage=None):
+        if stage == "test":
+            self.test_dataset = SequencePairDataset(
+                self.fasta_file,
+                self.test_file,
+                self.num_samples,
+            )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True,
+        )
+
+    def predict_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )

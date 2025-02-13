@@ -1,0 +1,18 @@
+seed_everything: 42
+model:
+    class_path: gLM.models.gLM2
+    init_args:
+        model: 
+            class_path: gLM.models.CategoricalJacobian
+            init_args:
+                fast: true
+data:
+  class_path: gLM.dataloader.SequencePairDataModule
+  init_args:
+    fasta_file: ../data/Bernett2022/human_swissprot_oneliner.fasta
+    data_folder: ../data/Bernett2022/
+    batch_size: 4096
+    positive_only: false
+    num_workers: 0
+    num_samples: null
+
