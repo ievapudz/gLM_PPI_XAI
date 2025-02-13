@@ -29,10 +29,3 @@ class Processor:
         pair_id = f"{pair[0].replace('_', '-')}_{pair[1].replace('_', '-')}"
         if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
         return (pair_id, concat_seq)
-
-proc = Processor("../data/Bernett2022/human_swissprot_oneliner.fasta", "../data/Bernett2022/Intra2_pos_rr.txt")
-fasta_dict = proc.load_fasta()
-
-pairs = proc.load_pair_list()
-id, seq = proc.process_pair(pairs[0], fasta_dict)
-print(id, seq)
