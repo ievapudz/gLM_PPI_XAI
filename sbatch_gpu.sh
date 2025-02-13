@@ -10,9 +10,9 @@ cat << EOF | sbatch
 #SBATCH --gres=gpu:1
 #SBATCH --gpus-per-task=1
 #SBATCH --gpus=1
-#SBATCH --mem=16G
+#SBATCH --mem=40G
 #SBATCH --partition=a100
-#SBATCH --qos=gpu30min
+#SBATCH --qos=gpu6hours
 #SBATCH --output="$JOB_NAME".out
 
 # activate conda env
