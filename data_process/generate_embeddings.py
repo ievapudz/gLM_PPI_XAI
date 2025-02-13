@@ -1,29 +1,44 @@
 #!/usr/bin/env python3
 
-from Processor import Processor
+from optparse import OptionParser
 import torch
 from transformers import AutoModel, AutoTokenizer
+from Processor import Processor
 
-proc = Processor("../data/Bernett2022/human_swissprot_oneliner.fasta", "../data/Bernett2022/Intra2_pos_rr.txt")
+parser = OptionParser()
+
+parser.add_option("--fasta", "-f", dest="fasta",
+	default=None, help="path to the input FASTA file.")
+
+parser.add_option("--pair-list", "-p", dest="pair_list",
+	default=None, help="path to the pair list file (sequence identifiers of "+\
+        "a pair separated with a whitespace character).")
+
+parser.add_option("--output", "-o", dest="output",
+	default=None, help="path to the output PT file with embeddings.")
+
+(options, args) = parser.parse_args()
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+model = AutoModel.from_pretrained('tattabio/gLM2_650M', torch_dtype=torch.bfloat16, trust_remote_code=True).to(DEVICE)
+tokenizer = AutoTokenizer.from_pretrained('tattabio/gLM2_650M', trust_remote_code=True)
+
+proc = Processor(options.fasta, options.pair_list)
 fasta_dict = proc.load_fasta()
 
 pairs = proc.load_pair_list()
+pair_embeddings = {}
 
-# TODO: iterate over all pairs in the list
-id, seq = proc.process_pair(pairs[0], fasta_dict)
-print(id, seq)
+for p in pairs:
+    id, seq = proc.process_pair(p, fasta_dict)
+    print(id, seq)
 
-# TODO: adjust the code for GPU and CPU versions
-model = AutoModel.from_pretrained('tattabio/gLM2_650M', torch_dtype=torch.bfloat16, trust_remote_code=True)
-tokenizer = AutoTokenizer.from_pretrained('tattabio/gLM2_650M', trust_remote_code=True)
+    encodings = tokenizer([seq], return_tensors='pt').to(DEVICE)
 
-encodings = tokenizer([seq], return_tensors='pt')
+    with torch.no_grad():
+        embeddings = model(encodings.input_ids, output_hidden_states=True).last_hidden_state
+            
+    pair_embeddings[id] = embeddings[0]
 
-with torch.no_grad():
-    embeddings = model(encodings.input_ids, output_hidden_states=True).last_hidden_state
-
-print(embeddings[0])
-
-# TODO: gather embeddings into a dictionary
-
-# TODO: save the dictionary into a PT file
+torch.save(pair_embeddings, options.output)
