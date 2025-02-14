@@ -21,7 +21,7 @@ class CategoricalJacobian(nn.Module):
 
         self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
 
-    def jac_to_contact(jac, symm=True, center=True, diag="remove", apc=True):
+    def jac_to_contact(self, jac, symm=True, center=True, diag="remove", apc=True):
         X = jac.copy()
         Lx, Ax, Ly, Ay = X.shape
 
@@ -51,7 +51,13 @@ class CategoricalJacobian(nn.Module):
 
         return contacts
 
-    def get_categorical_jacobian(self, sequence: str, fast: bool = False):
+    def get_categorical_jacobian(self, sequence: str):
+        print("computing CJ")
+        jac = None
+        contact = None
+        tokens = None
+
+        """
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
 
@@ -76,7 +82,7 @@ class CategoricalJacobian(nn.Module):
             ln = x.shape[1]
 
             fx = f(x)[0]
-            if fast:
+            if self.fast:
                 fx_h = torch.zeros((ln, 1 , ln, num_tokens), dtype=torch.float32)
             else:
                 fx_h = torch.zeros((ln,num_tokens,ln,num_tokens),dtype=torch.float32)
@@ -84,7 +90,7 @@ class CategoricalJacobian(nn.Module):
 
             for n in range(ln): # for each position
                 x_h = torch.clone(x)
-                if fast:
+                if self.fast:
                     x_h[:, n] = self.MASK_TOKEN_ID
                 else:
                     x_h[:, n] = torch.tensor(all_tokens)
@@ -96,26 +102,28 @@ class CategoricalJacobian(nn.Module):
             # Zero out other modality
             jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
             contact = self.jac_to_contact(jac.numpy())
+        """
         return jac, contact, tokens 
+        
     
-    def contact_to_dataframe(con):
+    def contact_to_dataframe(self, con):
+        df = pd.DataFrame()
+        """
         sequence_length = con.shape[0]
         idx = [str(i) for i in np.arange(1, sequence_length+1)]
         df = pd.DataFrame(con, index=idx, columns=idx)
         df = df.stack().reset_index()
         df.columns = ['i', 'j', 'value']
+        """
         return df
 
     def forward(self, x):
         for i, s in enumerate(x['sequence']):
-            print(s, x['label'][i])
-
-            # TODO: compute the CJ for each seq. in the batch
-
-            # TODO: save the CJ for each seq.
+            J, contact, tokens = self.get_categorical_jacobian(s)
+            df = self.contact_to_dataframe(contact)
+            df.to_csv(f"{x['concat_id'][i]}_CJ.csv")
 
             # TODO: detect the PPI signal in the CJ
-
         return
 
 
