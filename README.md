@@ -22,9 +22,11 @@ pip3 install torch torchvision torchaudio
 mamba install transformers
 mamba install einops
 mamba install sympy
+mamba install scikit-learn
 
 mamba install pytorch_lightning
 pip3 install -U 'jsonargparse[signatures]>=4.27.7'
+pip3 install mlflow
 ```
 
 ## Download gLM

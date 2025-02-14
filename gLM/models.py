@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import math
 from sklearn.metrics import zero_one_loss
+from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import MLFlowLogger
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool):
@@ -156,6 +158,9 @@ class gLM2(LightningModule):
         self.model = model
         self.predict_step_outputs = []
         self.save_hyperparameters()
+
+        mlf_logger = MLFlowLogger(experiment_name="lightning_logs", tracking_uri="file:./ml-runs")
+        trainer = Trainer(logger=mlf_logger)
 
     def get_log_outputs(self, x):
         output = self.model(x)
