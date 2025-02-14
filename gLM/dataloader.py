@@ -17,15 +17,15 @@ class SequencePairDataset(Dataset):
         num_samples: int = None,
     ):
         self.processor = Processor(fasta_file, data_file)
-        # TODO: update Processor module to read the TSV file with binary labels
+        self.data = self.processor.load_pair_list()
+
         if num_samples is not None:
-            self.data = pnd.read_csv(data_file, sep="\t").head(num_samples)
-        else:
-            self.data = pnd.read_csv(data_file, sep="\t")
+            self.data = self.data.head(num_samples)
+
         print(
             "Num positive pairs:",
             len(self.data[self.data["label"] == 1]),
-            "Num negative pairs:",
+            "\nNum negative pairs:",
             len(self.data[self.data["label"] == 0]),
         )
         self.fasta_file = fasta_file
