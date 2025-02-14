@@ -21,6 +21,8 @@ class SequencePairDataset(Dataset):
         if num_samples is not None:
             self.data = self.data.head(num_samples)
 
+        print(self.data["label"])
+
         print(
             "Num positive pairs:",
             len(self.data[self.data["label"] == 1]),
@@ -38,10 +40,13 @@ class SequencePairDataset(Dataset):
         item is a concatenated sequence of the pair
         """
         row = self.data.iloc[idx].to_dict()
-        pair_id, seq = self.processor.process_pair([row['protein1'], row['protein2']], self.fasta_dict, aa_only=True)
+        pair_id, seq, len1, len2 = self.processor.process_pair(
+            [row['protein1'], row['protein2']], self.fasta_dict, aa_only=True)
         # TODO: may be unnecessary - could be removed in that case
         row['concat_id'] = pair_id
         row['sequence'] = seq
+        row['length1'] = len1
+        row['length2'] = len2
         return row
 
 

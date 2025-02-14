@@ -4,6 +4,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 import numpy as np
 import pandas as pd
+import math
+from sklearn.metrics import zero_one_loss
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool):
@@ -52,12 +54,6 @@ class CategoricalJacobian(nn.Module):
         return contacts
 
     def get_categorical_jacobian(self, sequence: str):
-        print("computing CJ")
-        jac = None
-        contact = None
-        tokens = None
-
-        """
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
 
@@ -102,30 +98,57 @@ class CategoricalJacobian(nn.Module):
             # Zero out other modality
             jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
             contact = self.jac_to_contact(jac.numpy())
-        """
         return jac, contact, tokens 
-        
     
     def contact_to_dataframe(self, con):
-        df = pd.DataFrame()
-        """
         sequence_length = con.shape[0]
         idx = [str(i) for i in np.arange(1, sequence_length+1)]
         df = pd.DataFrame(con, index=idx, columns=idx)
         df = df.stack().reset_index()
         df.columns = ['i', 'j', 'value']
-        """
         return df
+    
+    def sigmoid(self, x):
+        return 1/(1+math.exp(-x))
+    
+    def detect_ppi(self, array, len1, sigmoid):
+        # Computing contact probability
+        array = sigmoid(array)
+        # Detecting the PPI signal in upper right quadrant of matrix
+        return np.max(array[:len1, len1:])
 
     def forward(self, x):
+        sigmoid_v = np.vectorize(self.sigmoid)
+        ppi_preds = []
+        
         for i, s in enumerate(x['sequence']):
             J, contact, tokens = self.get_categorical_jacobian(s)
             df = self.contact_to_dataframe(contact)
-            df.to_csv(f"{x['concat_id'][i]}_CJ.csv")
 
-            # TODO: detect the PPI signal in the CJ
-        return
+            # TODO: perhaps this chunk of code could be optimized?
+            pivot_df = df.pivot(index='i', columns='j', values='value')
 
+            sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
+            sorted_cols = [str(item) for item in sorted_cols]
+            pivot_df = pivot_df[sorted_cols]
+
+            # Sorting the rows
+            pivot_df.index = pivot_df.index.astype(int)
+            pivot_df = pivot_df.sort_index()
+
+            # Convert the pivot table to a 2D numpy array
+            array_2d = pivot_df.to_numpy()
+            np.save(f"{x['concat_id'][i]}_CJ.npy", array_2d)
+
+            # Detect the PPI signal in the CJ
+            ppi_pred = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
+            ppi_preds.append(ppi_pred) 
+        return np.array(ppi_preds)
+    
+    def compute_loss(self, x):
+        predictions = self(x)
+        pred_labels = np.round(predictions)
+        return zero_one_loss(x['label'], pred_labels)
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
@@ -138,8 +161,10 @@ class gLM2(LightningModule):
         output = self.model(x)
 
     def step(self, batch, batch_idx, split):
-        self.model.forward(batch)
-        return
+        predictions = self.model.forward(batch)
+        loss = self.model.compute_loss(batch)
+        print(loss)
+        return loss
 
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx, 'test')

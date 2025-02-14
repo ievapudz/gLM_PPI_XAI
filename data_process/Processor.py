@@ -21,6 +21,8 @@ class Processor:
         return pairs
     
     def process_pair(self, pair, fasta_dict, aa_only=True):
-        pair_id = f"{pair[0].replace('_', '-')}_{pair[1].replace('_', '-')}"
+        pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
         if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
-        return (pair_id, concat_seq)
+        len1 = len(fasta_dict[pair[0]])
+        len2 = len(fasta_dict[pair[1]])
+        return (pair_id, concat_seq, len1, len2)
