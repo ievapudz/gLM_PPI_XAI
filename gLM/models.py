@@ -7,6 +7,7 @@ class CategoricalJacobian(nn.Module):
         self.fast = fast 
 
     def forward(self, x):
+        print(x['sequence'], x['label'])
         return
 
 
@@ -19,6 +20,10 @@ class gLM2(LightningModule):
 
     def get_log_outputs(self, x):
         output = self.model(x)
+
+    def step(self, batch, batch_idx, split):
+        self.model.forward(batch)
+        return
 
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx, 'test')

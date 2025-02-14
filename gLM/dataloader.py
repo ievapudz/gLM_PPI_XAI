@@ -39,9 +39,11 @@ class SequencePairDataset(Dataset):
         item is a concatenated sequence of the pair
         """
         row = self.data.iloc[idx].to_dict()
-        # TODO: use Processor module to return a concatenated and processed sequence of the pair
-        #self.processor.process_pair(self, pair, fasta_dict, aa_only=True)   
-        return
+        pair_id, seq = self.processor.process_pair([row['protein1'], row['protein2']], self.fasta_dict, aa_only=True)
+        # TODO: may be unnecessary - could be removed in that case
+        row['concat_id'] = pair_id
+        row['sequence'] = seq
+        return row
 
 
 class SequencePairDataModule(LightningDataModule):
