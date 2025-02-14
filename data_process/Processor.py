@@ -1,5 +1,5 @@
 from Bio import SeqIO
-import pandas as pnd
+import pandas as pd
 
 class Processor:
     def __init__(self, fasta_path, pair_list_path):
@@ -17,7 +17,7 @@ class Processor:
         return fasta
     
     def load_pair_list(self):
-        pairs = pnd.read_csv(self.pair_list_path, sep="\t")
+        pairs = pd.read_csv(self.pair_list_path, sep="\t")
         return pairs
     
     def process_pair(self, pair, fasta_dict, aa_only=True):

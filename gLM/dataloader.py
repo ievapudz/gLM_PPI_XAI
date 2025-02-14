@@ -1,6 +1,5 @@
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
-import pandas as pnd
 from Bio import SeqIO
 from data_process.Processor import Processor
 from pathlib import Path
