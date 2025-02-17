@@ -141,6 +141,8 @@ class OutputLoggingCallback(Callback):
         # Initialize step_outputs in the pl_module if it doesn't exist
         if not hasattr(pl_module, "step_outputs"):
             pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
+        # TODO: find a way to log system metrics on the same board as the main experiment
+        mlflow.start_run(log_system_metrics=True)
 
     def _log_outputs(self, pl_module, batch, split):
         output_dict = pl_module.get_log_outputs(batch)
@@ -149,7 +151,6 @@ class OutputLoggingCallback(Callback):
             if not isinstance(output_dict[key], torch.Tensor):
                 continue
             pl_module.step_outputs[split][key].append(output_dict[key].cpu().detach())
-
 
     def on_train_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["train"].clear()
@@ -221,15 +222,13 @@ class LogClassificationMetrics(Callback):
 
     def on_test_start(self, trainer, pl_module):
         print("We start the testing stage")
-        mlflow.set_experiment(experiment_id="0")
-        mlflow.autolog()
-        mlflow.start_run()
-        mlflow.log_params(trainer.logger.experiment.get_params())
+        #mlflow.set_experiment(experiment_id="0")
+        #mlflow.autolog()
+        #mlflow.start_run()
+        #mlflow.log_params(trainer.logger.experiment.get_params())
 
     def on_test_epoch_end(self, trainer, pl_module):
-        print("We ended the test epoch")
         self.log_metrics(trainer, pl_module, "test")
 
-    def on_test_end(self, trainer, pl_module):
-        mlflow.end_run()
+
 

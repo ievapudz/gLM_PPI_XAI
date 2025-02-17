@@ -160,23 +160,10 @@ class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
         super().__init__()
         self.model = model
-        """
-        self.step_outputs = {
-            'train': {'predictions': [], 'labels': []},
-            'val': {'predictions': [], 'labels': []},
-            'test': {'predictions': [], 'labels': []},
-        }
-        """
         self.save_hyperparameters()
 
     def get_log_outputs(self, x):
         return {'predictions': self.model(x)}
-
-    """
-    def get_step_outputs(self, x):
-        output = self.model(x)
-        return {'predictions': output}
-    """
     
     def step(self, batch, batch_idx, split):
         batch['predictions'] = self.model(batch)
