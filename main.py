@@ -8,6 +8,7 @@ from pytorch_lightning import seed_everything
 import torch
 import warnings
 from jsonargparse import ArgumentParser, Namespace
+import mlflow
 
 warnings.filterwarnings('ignore')
 
@@ -16,7 +17,7 @@ def main():
 	Run with python main.py test -c configs/config.yaml
 	"""
 	torch.set_float32_matmul_precision('medium')
-	cli = LightningCLI()
+	cli = LightningCLI(save_config_kwargs={"overwrite": True})
 
 if __name__ == '__main__':
 	main()

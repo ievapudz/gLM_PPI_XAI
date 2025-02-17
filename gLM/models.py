@@ -7,7 +7,7 @@ import pandas as pd
 import math
 from sklearn.metrics import zero_one_loss
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import MLFlowLogger
+import mlflow
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool):
@@ -24,6 +24,9 @@ class CategoricalJacobian(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
         self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+
+        for param in self.model.parameters():
+            param.requires_grad = False
 
     def jac_to_contact(self, jac, symm=True, center=True, diag="remove", apc=True):
         X = jac.copy()
@@ -145,31 +148,48 @@ class CategoricalJacobian(nn.Module):
             # Detect the PPI signal in the CJ
             ppi_pred = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
             ppi_preds.append(ppi_pred) 
-        return np.array(ppi_preds)
+
+        return torch.FloatTensor(ppi_preds)
     
     def compute_loss(self, x):
         predictions = self(x)
         pred_labels = np.round(predictions)
-        return zero_one_loss(x['label'], pred_labels)
+        return {'loss': zero_one_loss(x['label'], pred_labels)}
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
         super().__init__()
         self.model = model
-        self.predict_step_outputs = []
+        """
+        self.step_outputs = {
+            'train': {'predictions': [], 'labels': []},
+            'val': {'predictions': [], 'labels': []},
+            'test': {'predictions': [], 'labels': []},
+        }
+        """
         self.save_hyperparameters()
 
-        mlf_logger = MLFlowLogger(experiment_name="lightning_logs", tracking_uri="file:./ml-runs")
-        trainer = Trainer(logger=mlf_logger)
-
     def get_log_outputs(self, x):
-        output = self.model(x)
+        return {'predictions': self.model(x)}
 
+    """
+    def get_step_outputs(self, x):
+        output = self.model(x)
+        return {'predictions': output}
+    """
+    
     def step(self, batch, batch_idx, split):
-        predictions = self.model.forward(batch)
-        loss = self.model.compute_loss(batch)
-        print(loss)
-        return loss
+        batch['predictions'] = self.model(batch)
+        self.step_outputs[split] = batch
+        #losses = self.model.compute_loss(batch)
+        return None
+
+    def training_step(self, batch, batch_idx):
+        self.step(batch, batch_idx, 'train')
+        return None
+
+    def validation_step(self, batch, batch_idx):
+        return self.step(batch, batch_idx, 'val')
 
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx, 'test')

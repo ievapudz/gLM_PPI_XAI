@@ -67,6 +67,8 @@ class SequencePairDataModule(LightningDataModule):
         super().__init__()
         self.fasta_file = Path(fasta_file)
         self.data_folder = Path(data_folder)
+        self.train_file = self.data_folder / "train.txt"
+        self.validate_file = self.data_folder / "validate.txt"
         self.test_file = self.data_folder / "test.txt"
         self.batch_size = batch_size
         self.positive_only = positive_only
@@ -74,12 +76,28 @@ class SequencePairDataModule(LightningDataModule):
         self.num_samples = num_samples
 
     def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            self.train_dataset = SequencePairDataset(
+                self.fasta_file,
+                self.train_file,
+                self.num_samples,
+            )
+
         if stage == "test":
             self.test_dataset = SequencePairDataset(
                 self.fasta_file,
                 self.test_file,
                 self.num_samples,
             )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+        )
 
     def test_dataloader(self):
         return DataLoader(
