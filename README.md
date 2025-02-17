@@ -37,6 +37,12 @@ ssh [username]@transfer12.scicore.unibas.ch
 git clone https://huggingface.co/tattabio/gLM2_650M
 ```
 
+## Access the MLFlow board
+
+```
+mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host localhost --port 8080
+```
+
 ## Notes
 
 1. For PyTorch-Lightning to accept MLflow logger, we need to override the setup method of SaveConfigCallback class as given [here](https://github.com/Lightning-AI/pytorch-lightning/discussions/14047).
