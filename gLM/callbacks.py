@@ -141,8 +141,8 @@ class OutputLoggingCallback(Callback):
         # Initialize step_outputs in the pl_module if it doesn't exist
         if not hasattr(pl_module, "step_outputs"):
             pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
-        # TODO: find a way to log system metrics on the same board as the main experiment
-        mlflow.start_run(log_system_metrics=True)
+        mlflow.set_experiment(trainer.logger._experiment_name)
+        mlflow.start_run(run_name=f"{trainer.logger._run_name}_system_metrics", log_system_metrics=True)
 
     def _log_outputs(self, pl_module, batch, split):
         output_dict = pl_module.get_log_outputs(batch)
@@ -219,13 +219,6 @@ class LogClassificationMetrics(Callback):
 
     def on_validation_epoch_end(self, trainer, pl_module):
         self.log_metrics(trainer, pl_module, "val")
-
-    def on_test_start(self, trainer, pl_module):
-        print("We start the testing stage")
-        #mlflow.set_experiment(experiment_id="0")
-        #mlflow.autolog()
-        #mlflow.start_run()
-        #mlflow.log_params(trainer.logger.experiment.get_params())
 
     def on_test_epoch_end(self, trainer, pl_module):
         self.log_metrics(trainer, pl_module, "test")
