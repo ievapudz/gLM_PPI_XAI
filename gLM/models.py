@@ -168,7 +168,6 @@ class gLM2(LightningModule):
     def step(self, batch, batch_idx, split):
         batch['predictions'] = self.model(batch)
         self.step_outputs[split] = batch
-        #losses = self.model.compute_loss(batch)
         return None
 
     def training_step(self, batch, batch_idx):

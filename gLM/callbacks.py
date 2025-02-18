@@ -144,6 +144,13 @@ class OutputLoggingCallback(Callback):
         mlflow.set_experiment(trainer.logger._experiment_name)
         mlflow.start_run(run_name=f"{trainer.logger._run_name}_system_metrics", log_system_metrics=True)
 
+    def on_test_start(self, trainer, pl_module):
+        # Initialize step_outputs in the pl_module if it doesn't exist
+        if not hasattr(pl_module, "step_outputs"):
+            pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
+        mlflow.set_experiment(trainer.logger._experiment_name)
+        mlflow.start_run(run_name=f"{trainer.logger._run_name}_system_metrics", log_system_metrics=True)
+
     def _log_outputs(self, pl_module, batch, split):
         output_dict = pl_module.get_log_outputs(batch)
 
@@ -157,6 +164,9 @@ class OutputLoggingCallback(Callback):
 
     def on_validation_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["val"].clear()
+
+    def on_test_epoch_start(self, trainer, pl_module):
+        pl_module.step_outputs["test"].clear()
 
 
 class LogClassificationMetrics(Callback):
