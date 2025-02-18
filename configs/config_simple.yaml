@@ -9,8 +9,8 @@ model:
 data:
   class_path: gLM.dataloader.SequencePairDataModule
   init_args:
-    fasta_file: ../data/simple/sequences.fasta
-    data_folder: ../data/simple/
+    fasta_file: ./data/simple/sequences.fasta
+    data_folder: ./data/simple/
     batch_size: 4096
     positive_only: false
     num_workers: 0
@@ -28,7 +28,6 @@ trainer:
     init_args:
       experiment_name: 'simple'
       run_name: 'simple0'
-      tracking_uri: 'http://localhost:8080'
       save_dir: './mlruns'
   enable_checkpointing: true
   callbacks:
