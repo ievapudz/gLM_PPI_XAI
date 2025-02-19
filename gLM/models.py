@@ -7,10 +7,10 @@ import pandas as pd
 import math
 from sklearn.metrics import zero_one_loss
 from pytorch_lightning import Trainer
-import mlflow
+import pathlib
 
 class CategoricalJacobian(nn.Module):
-    def __init__(self, fast: bool):
+    def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
         self.fast = fast
         self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
@@ -27,6 +27,9 @@ class CategoricalJacobian(nn.Module):
 
         for param in self.model.parameters():
             param.requires_grad = False
+
+        self.matrix_path = matrix_path
+        pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
     def jac_to_contact(self, jac, symm=True, center=True, diag="remove", apc=True):
         X = jac.copy()
@@ -143,7 +146,8 @@ class CategoricalJacobian(nn.Module):
 
             # Convert the pivot table to a 2D numpy array
             array_2d = pivot_df.to_numpy()
-            np.save(f"{x['concat_id'][i]}_CJ.npy", array_2d)
+            cj_type = 'fast' if(self.fast) else 'full'
+            np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
             ppi_pred = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
@@ -152,8 +156,8 @@ class CategoricalJacobian(nn.Module):
         return torch.FloatTensor(ppi_preds)
     
     def compute_loss(self, x):
-        predictions = self(x)
-        pred_labels = np.round(predictions)
+        predictions = x['predictions']
+        pred_labels = torch.round(predictions)
         return {'loss': zero_one_loss(x['label'], pred_labels)}
 
 class gLM2(LightningModule):
@@ -161,22 +165,22 @@ class gLM2(LightningModule):
         super().__init__()
         self.model = model
         self.save_hyperparameters()
-
-    def get_log_outputs(self, x):
-        return {'predictions': self.model(x)}
-    
+        
     def step(self, batch, batch_idx, split):
         batch['predictions'] = self.model(batch)
+        batch['predicted_label'] = torch.round(batch['predictions'])
         self.step_outputs[split] = batch
-        return None
+        losses = self.model.compute_loss(batch)
+        for key, value in losses.items():
+            self.log(f'{split}/{key}', value)
+        return losses['loss']
 
     def training_step(self, batch, batch_idx):
         self.step(batch, batch_idx, 'train')
-        return None
 
     def validation_step(self, batch, batch_idx):
-        return self.step(batch, batch_idx, 'val')
+        self.step(batch, batch_idx, 'val')
 
     def test_step(self, batch, batch_idx):
-        return self.step(batch, batch_idx, 'test')
+        self.step(batch, batch_idx, 'test')
 

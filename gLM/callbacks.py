@@ -140,6 +140,20 @@ class OutputLoggingCallback(Callback):
         self.log_every_n_steps = log_every_n_steps
         self.last_logged_step = 0
 
+    def on_epoch_end(self, trainer, pl_module, split):
+        # Create a table with protein IDs, true labels, and predicted labels
+        protein_ids = pl_module.step_outputs[split]['concat_id']
+        true_labels = pl_module.step_outputs[split]['label']
+        predicted_labels = pl_module.step_outputs[split]['predicted_label']
+        predictions = pl_module.step_outputs[split]['predictions']
+
+        table_data = []
+        for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
+            table_data.append([pid, true, pred_lab, pred])
+
+        table = wandb.Table(data=table_data, columns=["Complex ID", "True label", "Predicted label", "Prediction"])
+        trainer.logger.experiment.log({f"{split}_epoch_end": table})
+
     def on_fit_start(self, trainer, pl_module):
         # Initialize step_outputs in the pl_module if it doesn't exist
         if not hasattr(pl_module, "step_outputs"):
@@ -149,26 +163,24 @@ class OutputLoggingCallback(Callback):
         # Initialize step_outputs in the pl_module if it doesn't exist
         if not hasattr(pl_module, "step_outputs"):
             pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
-
-    def _log_outputs(self, pl_module, batch, split):
-        output_dict = pl_module.get_log_outputs(batch)
-
-        for key in output_dict:
-            if not isinstance(output_dict[key], torch.Tensor):
-                continue
-            pl_module.step_outputs[split][key].append(output_dict[key].cpu().detach())
-
+            
     def on_train_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["train"].clear()
 
     def on_train_epoch_end(self, trainer, pl_module):
-        trainer.logger.experiment.log(pl_module.step_outputs['train'])
+        self.on_epoch_end(trainer, pl_module, 'train')
 
     def on_validation_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["val"].clear()
 
+    def on_validation_epoch_end(self, trainer, pl_module):
+        self.on_epoch_end(trainer, pl_module, 'val')
+
     def on_test_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["test"].clear()
+
+    def on_test_epoch_end(self, trainer, pl_module):
+        self.on_epoch_end(trainer, pl_module, 'test')
 
 
 class LogClassificationMetrics(Callback):
