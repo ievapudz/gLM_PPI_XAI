@@ -1,8 +1,8 @@
-# Run as ./sbatch_cpu.sh <script> <job_name>
+# Run as ./sbatch_cpu.sh <job_name> <config>
 
 # Retrieve command name from the command line
-SCRIPT=$1
-JOB_NAME=$2
+JOB_NAME=$1
+CONFIG=$2
 
 # Use a heredoc to create the script
 cat << EOF | sbatch
@@ -16,6 +16,6 @@ cat << EOF | sbatch
 export PATH=/scicore/home/schwede/pudziu0000/mambaforge/bin:$PATH
 source activate gLM11
 
-srun python main.py fit -c configs/config_simple.yaml
+srun python main.py fit -c $CONFIG
 
 EOF
