@@ -167,9 +167,6 @@ class OutputLoggingCallback(Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["train"].clear()
 
-    def on_train_epoch_end(self, trainer, pl_module):
-        self.on_epoch_end(trainer, pl_module, 'train')
-
     def on_validation_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["val"].clear()
 

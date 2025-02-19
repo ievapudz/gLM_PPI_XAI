@@ -28,7 +28,7 @@ trainer:
     init_args:
       experiment_name: 'simple'
       run_name: 'simple0'
-      save_dir: './mlruns'
+      save_dir: './logs/mlruns'
   enable_checkpointing: true
   callbacks:
     - class_path: gLM.callbacks.OutputLoggingCallback

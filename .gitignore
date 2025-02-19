@@ -1,1 +1,7 @@
 gLM2_650M/
+data/
+logs/
+outputs/
+
+**/*.out
+**/__pycache__
