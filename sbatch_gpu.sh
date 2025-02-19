@@ -1,25 +1,29 @@
-# Run as ./sbatch_gpu.sh <job_name>
+# Run as ./sbatch_gpu.sh <job_name> <config_file>
 
 # Retrieve command name from the command line
 JOB_NAME=$1
+CONFIG_FILE=$1
+
+mkdir -p logs/slurm
 
 # Use a heredoc to create the script
 cat << EOF | sbatch
 #!/bin/bash
 #SBATCH --job-name=gLM_"$JOB_NAME"
+#SBATCH --nodes=1
+#SBATCH --output=logs/slurm/"$JOB_NAME".out 
 #SBATCH --gres=gpu:1
-#SBATCH --gpus-per-task=1
-#SBATCH --gpus=1
-#SBATCH --mem=40G
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=8G
 #SBATCH --partition=a100
-#SBATCH --qos=gpu6hours
-#SBATCH --output="$JOB_NAME".out
+#SBATCH --qos=gpu30min
+#SBATCH --reservation=schwede
 
-# activate conda env
-export PATH=/scicore/home/schwede/pudziu0000/mambaforge/bin:$PATH
+module load CUDA/12.4.0
+export PATH=$HOME/mambaforge/bin:$PATH
 source activate gLM
 
-nvidia-smi
-srun python categorical_jacobian_gLM2.py
+srun python main.py fit -c $CONFIG_FILE
 
 EOF
