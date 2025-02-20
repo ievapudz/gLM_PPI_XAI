@@ -158,7 +158,7 @@ class CategoricalJacobian(nn.Module):
     def compute_loss(self, x):
         predictions = x['predictions']
         pred_labels = torch.round(predictions)
-        return {'loss': zero_one_loss(x['label'], pred_labels)}
+        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):

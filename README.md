@@ -13,7 +13,7 @@ conda create -n gLM python=3.11
 
 conda activate gLM
 
-pip3 install lightning torch torch-geometric tensorboard wandb 'jsonargparse[signatures]' transformers mlflow
+pip3 install lightning torch torch-geometric tensorboard wandb 'jsonargparse[signatures]' transformers mlflow torchvision
 
 mamba install pandas numpy matplotlib einops sympy scikit-learn biopython seaborn
 ```

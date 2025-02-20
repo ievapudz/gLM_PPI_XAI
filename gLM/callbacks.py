@@ -42,7 +42,10 @@ def log_classification_metrics(
     if make_correct_dim:
         y_pred = torch.stack([1 - y_pred, y_pred], dim=1)
     y_pred_class = torch.argmax(y_pred, dim=1)
-    y_true_class = torch.argmax(y_true, dim=1).numpy().astype(int)
+    y_true_class = torch.argmax(y_true, dim=1).detach().cpu().numpy().astype(int)
+
+    y_pred = y_pred.cpu().detach()
+    y_pred_class = y_pred_class.cpu().detach()
 
     log_dict = {}
     suffix_title = f"{y_true_key} vs {y_pred_key}"
