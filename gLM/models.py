@@ -13,6 +13,8 @@ class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
         self.fast = fast
+        self.cj_type = 'fast' if(self.fast) else 'full'
+
         self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
         self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
 
@@ -119,6 +121,11 @@ class CategoricalJacobian(nn.Module):
     def sigmoid(self, x):
         return 1/(1+math.exp(-x))
     
+    def is_computed(self, id):
+        cj_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.cj_type}CJ.npy")
+        if(cj_path.is_file() and cj_path.stat().st_size != 0):
+            return True
+    
     def detect_ppi(self, array, len1, sigmoid):
         # Computing contact probability
         array = sigmoid(array)
@@ -130,24 +137,27 @@ class CategoricalJacobian(nn.Module):
         ppi_preds = []
         
         for i, s in enumerate(x['sequence']):
-            J, contact, tokens = self.get_categorical_jacobian(s)
-            df = self.contact_to_dataframe(contact)
+            if(self.is_computed(x['concat_id'][i])):
+                # Load the already computed matrix
+                array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
+            else:
+                J, contact, tokens = self.get_categorical_jacobian(s)
+                df = self.contact_to_dataframe(contact)
 
-            # TODO: perhaps this chunk of code could be optimized?
-            pivot_df = df.pivot(index='i', columns='j', values='value')
+                # TODO: perhaps this chunk of code could be optimized?
+                pivot_df = df.pivot(index='i', columns='j', values='value')
 
-            sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
-            sorted_cols = [str(item) for item in sorted_cols]
-            pivot_df = pivot_df[sorted_cols]
+                sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
+                sorted_cols = [str(item) for item in sorted_cols]
+                pivot_df = pivot_df[sorted_cols]
 
-            # Sorting the rows
-            pivot_df.index = pivot_df.index.astype(int)
-            pivot_df = pivot_df.sort_index()
+                # Sorting the rows
+                pivot_df.index = pivot_df.index.astype(int)
+                pivot_df = pivot_df.sort_index()
 
-            # Convert the pivot table to a 2D numpy array
-            array_2d = pivot_df.to_numpy()
-            cj_type = 'fast' if(self.fast) else 'full'
-            np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{cj_type}CJ.npy", array_2d)
+                # Convert the pivot table to a 2D numpy array
+                array_2d = pivot_df.to_numpy()
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
             ppi_pred = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
