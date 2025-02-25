@@ -77,7 +77,7 @@ class CategoricalJacobian(nn.Module):
 
         if diag == "normalize":
             contacts_diag = np.diag(contacts)
-            contacts = contacts/np.sqrt(contacts_diag[:,None]* contacts_diag[None,:])
+            contacts = contacts/np.sqrt(contacts_diag[:,None]*contacts_diag[None,:])
 
         if apc:
             ap = contacts.sum(0,keepdims=True)*contacts.sum(1, keepdims=True)/contacts.sum()
