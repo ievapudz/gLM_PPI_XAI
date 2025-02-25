@@ -8,6 +8,7 @@ import math
 from sklearn.metrics import zero_one_loss
 from pytorch_lightning import Trainer
 import pathlib
+from scipy.ndimage import gaussian_filter1d
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
@@ -33,7 +34,31 @@ class CategoricalJacobian(nn.Module):
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
-    def jac_to_contact(self, jac, symm=True, center=True, diag="remove", apc=True):
+        self.too_long = []
+
+    def conditioned_APC(self, s, len1):
+        new_s = np.zeros(np.shape(s))
+
+        for i in range(len(s)):
+            for j in range(len(s)):
+                if i < len1 and j < len1:
+                    # Case when both residues belong to the first protein
+                    expected = np.sum(s[i, :len1]) * np.sum(s[:len1, j]) / np.sum(s[:len1, :len1])
+                    new_s[i, j] = s[i, j] - expected
+                elif i >= len1 and j >= len1:
+                    # Case when both residues belong to the second protein
+                    expected = np.sum(s[i, len1:]) * np.sum(s[len1:, j]) / np.sum(s[len1:, len1:])
+                    new_s[i, j] = s[i, j] - expected
+                else:
+                    # Case when residues come from different proteins (ensure symmetry)
+                    E_ij = np.sum(s[i, len1:]) * np.sum(s[:len1, j]) / np.sum(s[len1:, :len1])
+                    E_ji = np.sum(s[j, len1:]) * np.sum(s[:len1, i]) / np.sum(s[len1:, :len1])
+                    expected = (E_ij + E_ji) / 2  # Symmetric correction
+                    new_s[i, j] = new_s[j, i] = s[i, j] - expected
+
+        return new_s
+
+    def jac_to_contact(self, jac, length1, symm=True, center=True, diag="remove", apc=True):
         X = jac.copy()
         Lx, Ax, Ly, Ay = X.shape
 
@@ -63,7 +88,7 @@ class CategoricalJacobian(nn.Module):
 
         return contacts
 
-    def get_categorical_jacobian(self, sequence: str):
+    def get_categorical_jacobian(self, sequence: str, length1: int):
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
 
@@ -89,7 +114,7 @@ class CategoricalJacobian(nn.Module):
 
             fx = f(x)[0]
             if self.fast:
-                fx_h = torch.zeros((ln, 1 , ln, num_tokens), dtype=torch.float32)
+                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
             else:
                 fx_h = torch.zeros((ln,num_tokens,ln,num_tokens),dtype=torch.float32)
                 x = torch.tile(x,[num_tokens,1])
@@ -107,7 +132,7 @@ class CategoricalJacobian(nn.Module):
             valid_aa = is_aa_pos & is_aa_token
             # Zero out other modality
             jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
-            contact = self.jac_to_contact(jac.numpy())
+            contact = self.jac_to_contact(jac.numpy(), length1)
         return jac, contact, tokens 
     
     def contact_to_dataframe(self, con):
@@ -122,26 +147,67 @@ class CategoricalJacobian(nn.Module):
         return 1/(1+math.exp(-x))
     
     def is_computed(self, id):
+        # TODO: adjust the naming of the output files after debugging
         cj_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.cj_type}CJ.npy")
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
     
-    def detect_ppi(self, array, len1, sigmoid):
+    def detect_ppi(self, array, len1, sigmoid, padding=0.1):
         # Computing contact probability
-        array = sigmoid(array)
+        #sigmoid_v = np.vectorize(sigmoid)
+
+        #array = sigmoid(array)
+        # Calculate the number of residues to ignore
+        ignore_len1 = int(len1*padding)
+        ignore_len2 = int((array.shape[0]-len1)*padding)
+
         # Detecting the PPI signal in upper right quadrant of matrix
-        return np.max(array[:len1, len1:])
+        upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+
+        # Apply Gaussian blur in two passes (horizontal and vertical)
+        sigma = 1  # Standard deviation for Gaussian kernel
+        upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=0)
+        upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=1)
+
+        # Calculate the first and third quartiles (Q1 and Q3)
+        Q1 = np.percentile(upper_right_quadrant, 25)
+        Q3 = np.percentile(upper_right_quadrant, 75)
+        IQR = Q3 - Q1
+
+        # Define the outlier threshold
+        threshold = Q3 + 1.5*IQR
+        low_threshold = Q1 - 1.5*IQR
+
+        # Detect outliers
+        ppi = 0
+        ppi_lab = 0
+        max_value = np.max(upper_right_quadrant)
+
+        if max_value > threshold:
+            ppi_lab = 1
+            
+        ppi = max_value
+
+        # Detecting the PPI signal in upper right quadrant of matrix
+        return ppi, ppi_lab
 
     def forward(self, x):
         sigmoid_v = np.vectorize(self.sigmoid)
         ppi_preds = []
-        
+        ppi_labs = []
+
         for i, s in enumerate(x['sequence']):
+            # TODO: has to be debugged properly - so that the number of true
+            #       labels would correspond to the number of done predictions
+            #if(len(x['sequence'][i]) > 1000):
+            #    print(x['concat_id'][i])
+            #    continue
+
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
             else:
-                J, contact, tokens = self.get_categorical_jacobian(s)
+                J, contact, tokens = self.get_categorical_jacobian(s, x['length1'][i])
                 df = self.contact_to_dataframe(contact)
 
                 # TODO: perhaps this chunk of code could be optimized?
@@ -160,14 +226,15 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            ppi_pred = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
+            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
             ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab) 
 
-        return torch.FloatTensor(ppi_preds)
+        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
     
     def compute_loss(self, x):
         predictions = x['predictions']
-        pred_labels = torch.round(predictions)
+        pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
 class gLM2(LightningModule):
@@ -177,8 +244,8 @@ class gLM2(LightningModule):
         self.save_hyperparameters()
         
     def step(self, batch, batch_idx, split):
-        batch['predictions'] = self.model(batch)
-        batch['predicted_label'] = torch.round(batch['predictions'])
+        batch['predictions'], batch['predicted_label'] = self.model(batch)
+    
         self.step_outputs[split] = batch
         losses = self.model.compute_loss(batch)
         for key, value in losses.items():

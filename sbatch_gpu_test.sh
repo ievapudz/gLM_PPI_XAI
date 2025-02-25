@@ -14,10 +14,10 @@ cat << EOF | sbatch
 #SBATCH --output=logs/slurm/"$JOB_NAME".out 
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=32G
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=16G
 #SBATCH --partition=a100
-#SBATCH --qos=gpu1week
+#SBATCH --qos=gpu30min
 #SBATCH --reservation=schwede
 
 module load CUDA/12.4.0

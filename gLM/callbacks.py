@@ -15,6 +15,63 @@ class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
         wandb.watch(pl_module.model, log="all", log_graph=True, log_freq=1)
 
+def log_logit_classification_metrics(
+    y_pred_lab,
+    y_true_lab,
+    prefix,
+    trainer,
+    metrics_to_plot=[
+        "mcc",
+        "confusion_matrix",
+        "class_proportions",
+        "classification_report",
+    ],
+    class_names=["Negative", "Positive"],
+):
+    log_dict = {}
+    y_true_lab = y_true_lab.detach().cpu().numpy().astype(int)
+    y_pred_lab = y_pred_lab.detach().cpu().numpy().astype(int)
+    num_classes = len(class_names)
+
+    if "mcc" in metrics_to_plot:
+        log_dict[f"{prefix}_mcc"] = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+
+    if "confusion_matrix" in metrics_to_plot:
+        log_dict[f"{prefix}_confusion_matrix"] = wandb.plot.confusion_matrix(probs=None,
+            y_true=y_true_lab, preds=y_pred_lab,
+            class_names=class_names)
+
+    if "classification_report" in metrics_to_plot:
+        class_report = metrics.classification_report(
+            y_true_lab, y_pred_lab, target_names=class_names
+        ).split("\n")
+        report_columns = ["Class", "Precision", "Recall", "F1-score", "Support"]
+        report_table = []
+        for line in class_report[2 : (num_classes + 2)]:
+            report_table.append(line.split())
+        log_dict[f"{prefix}_classification_report"] = wandb.Table(
+            dataframe=pd.DataFrame(report_table, columns=report_columns)
+        )
+
+    if "class_proportions" in metrics_to_plot:
+        class_counts = np.bincount(y_true_lab, minlength=num_classes)
+        class_proportions = class_counts / len(y_true_lab)
+        log_dict[f"{prefix}_class_proportions"] = wandb.plot.bar(
+            wandb.Table(
+                data=[
+                    [class_names[i], class_proportions[i]] for i in range(num_classes)
+                ],
+                columns=["Class", "Proportion"],
+            ),
+            "Class",
+            "Proportion",
+            title=f"Class Proportions",
+            split_table=True,
+        )
+        
+    return log_dict
+
+
 def log_classification_metrics(
     y_pred,
     y_true,
@@ -193,13 +250,9 @@ class LogClassificationMetrics(Callback):
         invert_probabilities: bool = False,
         make_correct_dim: bool = False,
         metrics_to_plot: list = [
+            "mcc",
             "confusion_matrix",
-            "roc",
-            "roc_curve",
-            "pr",
-            "pr_curve",
             "class_proportions",
-            "calibration_curves",
             "classification_report",
         ],
     ):
@@ -217,27 +270,20 @@ class LogClassificationMetrics(Callback):
         self.metrics_to_plot = metrics_to_plot
 
     def log_metrics(self, trainer, pl_module, split):
-        y_pred = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
-        y_true = torch.cat([pl_module.step_outputs[split][self.y_true_key]], dim=0)
+        y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
+        y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_key]], dim=0)
 
-        log_dict = log_classification_metrics(
-            y_pred,
-            y_true,
-            y_true_key=self.y_true_key,
-            y_pred_key=self.y_pred_key,
+        log_dict = log_logit_classification_metrics(
+            y_pred_lab,
+            y_true_lab,
             prefix=split,
             trainer=trainer,
             class_names=self.class_names,
-            make_one_hot=self.make_one_hot,
-            invert_probabilities=self.invert_probabilities,
-            make_correct_dim=self.make_correct_dim,
             metrics_to_plot=self.metrics_to_plot,
         )
         
-        #for key, value in log_dict.items():
         trainer.logger.experiment.log(log_dict)
         
-
     def on_train_epoch_end(self, trainer, pl_module):
         self.log_metrics(trainer, pl_module, "train")
 

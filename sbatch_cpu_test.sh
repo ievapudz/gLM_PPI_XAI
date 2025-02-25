@@ -8,7 +8,7 @@ CONFIG=$2
 cat << EOF | sbatch
 #!/bin/bash
 #SBATCH --job-name="$JOB_NAME"
-#SBATCH --output="$JOB_NAME".out
+#SBATCH --output=logs/slurm/"$JOB_NAME".out
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 

@@ -45,8 +45,8 @@ class SequencePairDataset(Dataset):
         # TODO: may be unnecessary - could be removed in that case
         row['concat_id'] = pair_id
         row['sequence'] = seq
-        row['length1'] = len1
-        row['length2'] = len2
+        row['length1'] = len1+1
+        row['length2'] = len2+1
         return row
 
 
