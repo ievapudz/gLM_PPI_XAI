@@ -165,9 +165,9 @@ class CategoricalJacobian(nn.Module):
         upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
 
         # Apply Gaussian blur in two passes (horizontal and vertical)
-        sigma = 1  # Standard deviation for Gaussian kernel
-        upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=0)
-        upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=1)
+        #sigma = 3  # Standard deviation for Gaussian kernel
+        #upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=0)
+        #upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=1)
 
         # Calculate the first and third quartiles (Q1 and Q3)
         Q1 = np.percentile(upper_right_quadrant, 25)
@@ -176,7 +176,6 @@ class CategoricalJacobian(nn.Module):
 
         # Define the outlier threshold
         threshold = Q3 + 1.5*IQR
-        low_threshold = Q1 - 1.5*IQR
 
         # Detect outliers
         ppi = 0
