@@ -27,14 +27,21 @@ def log_logit_classification_metrics(
         "classification_report",
     ],
     class_names=["Negative", "Positive"],
+    y_pred=None
 ):
     log_dict = {}
+
     y_true_lab = y_true_lab.detach().cpu().numpy().astype(int)
     y_pred_lab = y_pred_lab.detach().cpu().numpy().astype(int)
+    y_pred = y_pred.detach().cpu().numpy().astype(int)
+
     num_classes = len(class_names)
 
     if "mcc" in metrics_to_plot:
         log_dict[f"{prefix}_mcc"] = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+
+    if "roc" in metrics_to_plot:
+        log_dict[f"{prefix}_roc"] = metrics.roc_auc_score(y_true_lab, y_pred)
 
     if "confusion_matrix" in metrics_to_plot:
         log_dict[f"{prefix}_confusion_matrix"] = wandb.plot.confusion_matrix(probs=None,
@@ -245,7 +252,8 @@ class LogClassificationMetrics(Callback):
         self,
         class_names: list,
         y_pred_key: str,
-        y_true_key: str,
+        y_pred_lab_key: str,
+        y_true_lab_key: str,
         make_one_hot: bool = False,
         invert_probabilities: bool = False,
         make_correct_dim: bool = False,
@@ -259,7 +267,8 @@ class LogClassificationMetrics(Callback):
         self.num_classes = len(class_names)
         self.class_names = class_names
         self.y_pred_key = y_pred_key
-        self.y_true_key = y_true_key
+        self.y_pred_lab_key = y_pred_lab_key
+        self.y_true_lab_key = y_true_lab_key
         self.make_one_hot = make_one_hot
         self.invert_probabilities = invert_probabilities
         self.make_correct_dim = make_correct_dim
@@ -270,12 +279,14 @@ class LogClassificationMetrics(Callback):
         self.metrics_to_plot = metrics_to_plot
 
     def log_metrics(self, trainer, pl_module, split):
-        y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
-        y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_key]], dim=0)
+        y_pred = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
+        y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_lab_key]], dim=0)
+        y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_lab_key]], dim=0)
 
         log_dict = log_logit_classification_metrics(
             y_pred_lab,
             y_true_lab,
+            y_pred=y_pred,
             prefix=split,
             trainer=trainer,
             class_names=self.class_names,

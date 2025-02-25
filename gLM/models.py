@@ -151,12 +151,24 @@ class CategoricalJacobian(nn.Module):
         cj_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.cj_type}CJ.npy")
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
-    
-    def detect_ppi(self, array, len1, sigmoid, padding=0.1):
-        # Computing contact probability
-        #sigmoid_v = np.vectorize(sigmoid)
 
-        #array = sigmoid(array)
+    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3):
+        if mode == "IQR":
+            Q1 = np.percentile(upper_right_quadrant, 25)
+            Q3 = np.percentile(upper_right_quadrant, 75)
+            IQR = Q3-Q1
+            threshold = Q3+1.5*IQR
+
+        elif mode == "mean_stddev":
+            m = np.mean(upper_right_quadrant)
+            s = np.std(upper_right_quadrant)
+            threshold = m+n*s
+
+        count_above_threshold = np.sum(upper_right_quadrant > threshold)
+
+        return count_above_threshold
+    
+    def detect_ppi(self, array, len1, padding=0.1):
         # Calculate the number of residues to ignore
         ignore_len1 = int(len1*padding)
         ignore_len2 = int((array.shape[0]-len1)*padding)
@@ -164,29 +176,12 @@ class CategoricalJacobian(nn.Module):
         # Detecting the PPI signal in upper right quadrant of matrix
         upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
 
-        # Apply Gaussian blur in two passes (horizontal and vertical)
-        #sigma = 3  # Standard deviation for Gaussian kernel
-        #upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=0)
-        #upper_right_quadrant = gaussian_filter1d(upper_right_quadrant, sigma=sigma, axis=1)
-
-        # Calculate the first and third quartiles (Q1 and Q3)
-        Q1 = np.percentile(upper_right_quadrant, 25)
-        Q3 = np.percentile(upper_right_quadrant, 75)
-        IQR = Q3 - Q1
-
-        # Define the outlier threshold
-        threshold = Q3 + 1.5*IQR
-
         # Detect outliers
-        ppi = 0
+        ppi = self.outlier_count(upper_right_quadrant, mode="mean_stddev")
+
+        # Just a placeholder for the counting stage
         ppi_lab = 0
-        max_value = np.max(upper_right_quadrant)
-
-        if max_value > threshold:
-            ppi_lab = 1
-            
-        ppi = max_value
-
+        
         # Detecting the PPI signal in upper right quadrant of matrix
         return ppi, ppi_lab
 
@@ -225,7 +220,7 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i], sigmoid_v)
+            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
 
