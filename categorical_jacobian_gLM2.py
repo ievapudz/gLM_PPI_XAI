@@ -3,7 +3,6 @@
 import os
 from typing import List
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize, LinearSegmentedColormap, to_hex
@@ -17,6 +16,9 @@ parser = OptionParser()
 parser.add_option("--fast", "-f", dest="fast",
 	default=False, action="store_true", 
     help="option to run the fast mode of categorical Jacobian computation.")
+
+parser.add_option("--output", "-o", dest="output",
+    default=None, help="path to the output PNG of the categorical Jacobian matrix.")
 
 (options, args) = parser.parse_args()
 
@@ -80,7 +82,7 @@ def create_figure(df):
     plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust the rect parameter to make space for the title
 
     # Save the figure with increased space for the title
-    plt.savefig('test.png', bbox_inches='tight', pad_inches=0.5, dpi=300)
+    plt.savefig(options.output, bbox_inches='tight', pad_inches=0.5, dpi=300)
 
 
 def contact_to_dataframe(con):

@@ -21,8 +21,8 @@ parser.add_option("--output", "-o", dest="output",
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model = AutoModel.from_pretrained('tattabio/gLM2_650M', torch_dtype=torch.bfloat16, trust_remote_code=True).to(DEVICE)
-tokenizer = AutoTokenizer.from_pretrained('tattabio/gLM2_650M', trust_remote_code=True)
+model = AutoModel.from_pretrained('./gLM2_650M', torch_dtype=torch.bfloat16, trust_remote_code=True).to(DEVICE)
+tokenizer = AutoTokenizer.from_pretrained('./gLM2_650M', trust_remote_code=True)
 
 proc = Processor(options.fasta, options.pair_list)
 fasta_dict = proc.load_fasta()
