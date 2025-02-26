@@ -175,9 +175,10 @@ class CategoricalJacobian(nn.Module):
 
         # Detecting the PPI signal in upper right quadrant of matrix
         upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+        quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(upper_right_quadrant, mode="mean_stddev")
+        ppi = self.outlier_count(upper_right_quadrant, mode="IQR")/quadrant_size
 
         # Just a placeholder for the counting stage
         ppi_lab = 0
