@@ -38,6 +38,20 @@ mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./
 srun --mem-per-cpu=8GB --cpus-per-task=1 --reservation=schwede bash batch_visualise_CJ.sh data/Bernett2022/false_positive_sample.lst 
 ```
 
+## Computation of entropy
+
+For single proteins:
+
+```
+srun --mem-per-cpu=8GB --cpus-per-task=1 --reservation=schwede python3 scoring/compute_entropy.py -i data/Bernett2022/fp_proteins.lst
+```
+
+For the complexes:
+
+```
+srun --mem-per-cpu=8GB --cpus-per-task=1 --reservation=schwede python3 scoring/compute_entropy.py -i data/Bernett2022/false_positive_sample.lst -c
+```
+
 ## Notes
 
 1. For PyTorch-Lightning to accept MLflow logger, we need to override the setup method of SaveConfigCallback class as given [here](https://github.com/Lightning-AI/pytorch-lightning/discussions/14047).
