@@ -26,7 +26,6 @@ fast = options.fast
 
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 MODEL_PATH = "./gLM2_650M" # on cluster
 
