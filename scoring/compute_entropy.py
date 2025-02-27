@@ -9,6 +9,13 @@ from torch.distributions import Categorical
 import numpy as np
 import matplotlib.pyplot as plt
 from Bio import SeqIO
+import os
+import sys
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, parent_dir)
+
+from data_process import Processor
 
 NUC_TOKENS = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
 AA_TOKENS = tuple(range(4, 24)) # 20 amino acid
@@ -20,9 +27,11 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, trust_remote_code=True)
 
 def get_sequences(sequence_ids, fasta_file):
     sequences = {}
+
     with open(fasta_file, "r") as fh:
         for record in SeqIO.parse(fh, "fasta"):
             if(record.id in sequence_ids): sequences[record.id] = f"<+>{record.seq}"
+
     return sequences
 
 def get_entropy(sequence: str):
@@ -58,11 +67,15 @@ def plot_entropy(entropy_values, id):
     plt.ylim(0, 1)
     plt.grid(True)
     plt.savefig(f'outputs/visualisations/entropy/{id}.png')
+    plt.close()
 
 parser = OptionParser()
 
 parser.add_option("--input", "-i", dest="input",
 	default=None,  help="protein ids to process.")
+
+parser.add_option("--complexes", "-c", dest="are_complexes",
+	default=False, action="store_true", help="flag to compute the entropy for protein complexes.")
 
 parser.add_option("--fasta", "-f", dest="fasta",
 	default="./data/Bernett2022/human_swissprot_oneliner.fasta",  
@@ -73,7 +86,16 @@ parser.add_option("--fasta", "-f", dest="fasta",
 with open(options.input, 'r') as file:
     options.input = [line.strip() for line in file.readlines()]
 
-sequences = get_sequences(options.input, options.fasta)
+if(options.are_complexes):
+    proc = Processor.Processor(fasta_path=options.fasta, pair_list_path=options.input)
+    fasta = proc.load_fasta()
+    sequences = {}
+    for pair in options.input:
+        print(pair)
+        _, concat_seq, _, _ = proc.process_pair(pair, fasta, aa_only=True, ready_pair_ids=True)
+        sequences[pair] = concat_seq
+else:
+    sequences = get_sequences(options.input, options.fasta)
 
 for id in options.input: 
     sequence = sequences[id]

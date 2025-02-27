@@ -16,12 +16,16 @@ class Processor:
         fasta = dict(zip(headers, seqs))
         return fasta
     
-    def load_pair_list(self):
+    def load_pair_list(self,):
         pairs = pd.read_csv(self.pair_list_path, sep="\t")
         return pairs
     
-    def process_pair(self, pair, fasta_dict, aa_only=True):
-        pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
+    def process_pair(self, pair, fasta_dict, aa_only=True, ready_pair_ids=False):
+        if(ready_pair_ids):
+            pair_id = pair
+            pair = pair.split('_')
+        else:
+            pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
         if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
         len1 = len(fasta_dict[pair[0]])
         len2 = len(fasta_dict[pair[1]])
