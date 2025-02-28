@@ -9,6 +9,7 @@ from sklearn.metrics import zero_one_loss
 from pytorch_lightning import Trainer
 import pathlib
 from scipy.ndimage import gaussian_filter1d
+from torch.distributions import Categorical
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
@@ -231,6 +232,128 @@ class CategoricalJacobian(nn.Module):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+
+class EntropyMatrix(nn.Module):
+    def __init__(self, fast: bool, matrix_path: str):
+        super().__init__()
+        self.fast = fast
+        self.type = 'fast' if(self.fast) else 'full'
+
+        self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
+        self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        model_path = "./gLM2_650M"
+        self.model = AutoModelForMaskedLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.matrix_path = matrix_path
+        pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
+
+    def is_computed(self, id):
+        m_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.type}Entropy.npy")
+        if(m_path.is_file() and m_path.stat().st_size != 0):
+            return True
+
+    def get_matrix(self, sequence: str, length1: int):
+        all_tokens = self.nuc_tokens + self.aa_tokens
+        num_tokens = len(all_tokens)
+
+        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
+        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+        seqlen = input_ids.shape[0]
+        # [seqlen, 1, seqlen, 1].
+        is_nuc_pos = torch.isin(input_ids, torch.tensor(self.nuc_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+        # [1, num_tokens, 1, num_tokens].
+        is_nuc_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.nuc_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
+        # [seqlen, 1, seqlen, 1].
+        is_aa_pos = torch.isin(input_ids, torch.tensor(self.aa_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+        # [1, num_tokens, 1, num_tokens].
+        is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.aa_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
+
+        input_ids = input_ids.unsqueeze(0).to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
+            f = lambda x: self.model(x)[0][..., all_tokens].cpu().float()
+
+            x = torch.clone(input_ids).to(self.device)
+            ln = x.shape[1]
+
+            fx = f(x)[0]
+            if self.fast:
+                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
+            else:
+                fx_h = torch.zeros((ln,num_tokens,ln,num_tokens),dtype=torch.float32)
+                x = torch.tile(x,[num_tokens,1])
+
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if self.fast:
+                    x_h[:, n] = self.MASK_TOKEN_ID
+                else:
+                    x_h[:, n] = torch.tensor(all_tokens)
+                fx_h[n] = f(x_h)
+
+            # TODO: continue form this part
+            probx_h = torch.nn.functional.softmax(fx_h, dim=-1)
+            probx = torch.nn.functional.softmax(fx, dim=1)
+
+            entropy_h = Categorical(probs=probx_h).entropy()
+            entropy = Categorical(probs=probx).entropy()
+
+            delta = entropy_h - entropy
+
+            print(delta.shape)
+            print(delta)
+            
+        return delta
+
+    def forward(self, x):
+        ppi_preds = []
+        ppi_labs = []
+
+        for i, s in enumerate(x['sequence']):
+            if(self.is_computed(x['concat_id'][i])):
+                # Load the already computed matrix
+                array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy")
+            else:
+                # TODO: this part has to be edited
+                J, contact, tokens = self.get_matrix(s, x['length1'][i])
+                df = self.contact_to_dataframe(contact)
+
+                pivot_df = df.pivot(index='i', columns='j', values='value')
+
+                sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
+                sorted_cols = [str(item) for item in sorted_cols]
+                pivot_df = pivot_df[sorted_cols]
+
+                # Sorting the rows
+                pivot_df.index = pivot_df.index.astype(int)
+                pivot_df = pivot_df.sort_index()
+
+                # Convert the pivot table to a 2D numpy array
+                array_2d = pivot_df.to_numpy()
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", array_2d)
+
+            # Detect the PPI signal in the CJ
+            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
+            ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab) 
+
+        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
+
+    def compute_loss(self, x):
+        predictions = x['predictions']
+        pred_labels = x['predicted_label']
+        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+
+
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
