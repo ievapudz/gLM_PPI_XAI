@@ -326,9 +326,9 @@ class EntropyMatrix(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", entropy_m)
 
             # Detect the PPI signal in the CJ
-            ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
-            ppi_preds.append(ppi_pred) 
-            ppi_labs.append(ppi_lab) 
+            #ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
+            #ppi_preds.append(ppi_pred) 
+            #ppi_labs.append(ppi_lab) 
 
         return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
 

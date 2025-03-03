@@ -3,9 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from optparse import OptionParser
-from matplotlib.colors import Normalize, LinearSegmentedColormap, to_hex
 import math
-from scipy.ndimage import gaussian_filter1d
 
 MATRIX_PATH = "./outputs/entropy_matrices/"
 MATRIX_SUFFIX = "fastEntropy.npy"
@@ -15,7 +13,7 @@ PNG_SUFFIX = "fastEntropy.png"
 parser = OptionParser()
 
 parser.add_option("--input", "-i", dest="input",
-    help="complex ID, whose categorical Jacobian matrix should be plotted.")
+    help="complex ID, whose entropy matrix should be plotted.")
 
 parser.add_option("--length-list", "-l", dest="length_list",
     help="list with lengths of the proteins.")
@@ -30,13 +28,14 @@ def get_protein_length(length_list, complex_id):
             identifier, length = line.strip().split(',')
             lengths[identifier] = int(length)
     
+    # Get the first protein id from the concatenated complex id
+    first_protein_id = complex_id.split('_')[0]
+
     # Return the length of the first protein
-    return lengths[complex_id]
+    return lengths[first_protein_id]
     
 def create_figure(array_2d, output, len1):
     # array_2d - [NumPy array 2D] with deltas in entropies
-
-    print(array_2d)
 
     cmap = plt.get_cmap("bwr")
 
