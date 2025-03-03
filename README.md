@@ -26,10 +26,18 @@ ssh [username]@transfer12.scicore.unibas.ch
 git clone https://huggingface.co/tattabio/gLM2_650M
 ```
 
-## Access the MLFlow board
+## Access the MLFlow board (deprecated?)
 
 ```
 mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host localhost --port 8080
+```
+
+## Running of the predictions
+
+Example for the entropy predictions:
+
+```
+./sbatch_gpu_test.sh Bernett2022-entropy-gpu configs/Bernett2022_1k_entropy.yaml 
 ```
 
 ## Visualisation of categorical Jacobians

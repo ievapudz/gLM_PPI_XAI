@@ -261,6 +261,40 @@ class EntropyMatrix(nn.Module):
         if(m_path.is_file() and m_path.stat().st_size != 0):
             return True
 
+    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3):
+        if mode == "IQR":
+            Q1 = np.percentile(upper_right_quadrant, 25)
+            Q3 = np.percentile(upper_right_quadrant, 75)
+            IQR = Q3-Q1
+            threshold = Q3+1.5*IQR
+
+        elif mode == "mean_stddev":
+            m = np.mean(upper_right_quadrant)
+            s = np.std(upper_right_quadrant)
+            threshold = m+n*s
+
+        count_above_threshold = np.sum(upper_right_quadrant > threshold)
+
+        return count_above_threshold
+    
+    def detect_ppi(self, array, len1, padding=0.1):
+        # Calculate the number of residues to ignore
+        ignore_len1 = int(len1*padding)
+        ignore_len2 = int((array.shape[0]-len1)*padding)
+
+        # Detecting the PPI signal in upper right quadrant of matrix
+        upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+        quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
+
+        # Detect outliers
+        ppi = self.outlier_count(upper_right_quadrant, mode="IQR")/quadrant_size
+
+        # Just a placeholder for the counting stage
+        ppi_lab = 0
+        
+        # Detecting the PPI signal in upper right quadrant of matrix
+        return ppi, ppi_lab
+
     def get_matrix(self, sequence: str, length1: int):
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
@@ -326,9 +360,10 @@ class EntropyMatrix(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", entropy_m)
 
             # Detect the PPI signal in the CJ
-            #ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
-            #ppi_preds.append(ppi_pred) 
-            #ppi_labs.append(ppi_lab) 
+            print(x['concat_id'][i])
+            ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
+            ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab) 
 
         return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
 

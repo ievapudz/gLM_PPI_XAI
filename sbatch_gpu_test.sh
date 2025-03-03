@@ -15,9 +15,9 @@ cat << EOF | sbatch
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=16G
+#SBATCH --mem-per-cpu=64G
 #SBATCH --partition=a100
-#SBATCH --qos=gpu30min
+#SBATCH --qos=gpu1day
 #SBATCH --reservation=schwede
 
 module load CUDA/12.4.0
