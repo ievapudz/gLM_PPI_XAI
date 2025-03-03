@@ -300,17 +300,15 @@ class EntropyMatrix(nn.Module):
                     x_h[:, n] = torch.tensor(all_tokens)
                 fx_h[n] = f(x_h)
 
-            # TODO: continue form this part
             probx_h = torch.nn.functional.softmax(fx_h, dim=-1)
             probx = torch.nn.functional.softmax(fx, dim=1)
 
             entropy_h = Categorical(probs=probx_h).entropy()
             entropy = Categorical(probs=probx).entropy()
 
-            delta = entropy_h - entropy
+            max_entropy = Categorical(probs=torch.FloatTensor([1/num_tokens]*num_tokens)).entropy()
 
-            print(delta.shape)
-            print(delta)
+            delta = (entropy_h - entropy)/max_entropy
             
         return delta
 
@@ -321,28 +319,14 @@ class EntropyMatrix(nn.Module):
         for i, s in enumerate(x['sequence']):
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
-                array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy")
+                entropy_m = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy")
             else:
-                # TODO: this part has to be edited
-                J, contact, tokens = self.get_matrix(s, x['length1'][i])
-                df = self.contact_to_dataframe(contact)
-
-                pivot_df = df.pivot(index='i', columns='j', values='value')
-
-                sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
-                sorted_cols = [str(item) for item in sorted_cols]
-                pivot_df = pivot_df[sorted_cols]
-
-                # Sorting the rows
-                pivot_df.index = pivot_df.index.astype(int)
-                pivot_df = pivot_df.sort_index()
-
-                # Convert the pivot table to a 2D numpy array
-                array_2d = pivot_df.to_numpy()
-                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", array_2d)
+                entropy_m = self.get_matrix(s, x['length1'][i])
+                entropy_m = entropy_m.cpu().detach().numpy().squeeze(1)
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", entropy_m)
 
             # Detect the PPI signal in the CJ
-            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
+            ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
 
@@ -352,8 +336,6 @@ class EntropyMatrix(nn.Module):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
-
-
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
