@@ -40,10 +40,18 @@ Example for the entropy predictions:
 ./sbatch_gpu_test.sh Bernett2022-entropy-gpu configs/Bernett2022_1k_entropy.yaml 
 ```
 
-## Visualisation of categorical Jacobians
+## Visualisations
+
+Categorical Jacobians:
 
 ```
 srun --mem-per-cpu=8GB --cpus-per-task=1 --reservation=schwede bash batch_visualise_CJ.sh data/Bernett2022/false_positive_sample.lst 
+```
+
+Line detection from entropy matrices:
+
+```
+python3 data_process/detect_lines.py -i P23763_P18847 -l data/Bernett2022/lengths.csv
 ```
 
 ## Computation of entropy
