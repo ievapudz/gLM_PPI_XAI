@@ -273,24 +273,31 @@ class EntropyMatrix(nn.Module):
             s = np.std(upper_right_quadrant)
             threshold = m+n*s
 
+        elif mode == "P95":
+            threshold = max(np.percentile(upper_right_quadrant, 95), 0.1)
+
         count_above_threshold = np.sum(upper_right_quadrant > threshold)
 
         return count_above_threshold
     
     def detect_ppi(self, array, len1, padding=0.1):
-        # Calculate the number of residues to ignore
-        ignore_len1 = int(len1*padding)
-        ignore_len2 = int((array.shape[0]-len1)*padding)
+        if(padding == 0):
+            upper_right_quadrant = array[:len1, len1:]
+        else:
+            # Calculate the number of residues to ignore
+            ignore_len1 = int(len1*padding)
+            ignore_len2 = int((array.shape[0]-len1)*padding)
 
-        # Detecting the PPI signal in upper right quadrant of matrix
-        upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+            # Detecting the PPI signal in upper right quadrant of matrix
+            upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+
         quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(upper_right_quadrant, mode="IQR")/quadrant_size
+        ppi = self.outlier_count(upper_right_quadrant, mode="P95")/quadrant_size
 
         # Just a placeholder for the counting stage
-        ppi_lab = 0
+        ppi_lab = 1 if(ppi) else 0
         
         # Detecting the PPI signal in upper right quadrant of matrix
         return ppi, ppi_lab
@@ -300,16 +307,6 @@ class EntropyMatrix(nn.Module):
         num_tokens = len(all_tokens)
 
         input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
-        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
-        seqlen = input_ids.shape[0]
-        # [seqlen, 1, seqlen, 1].
-        is_nuc_pos = torch.isin(input_ids, torch.tensor(self.nuc_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_nuc_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.nuc_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
-        # [seqlen, 1, seqlen, 1].
-        is_aa_pos = torch.isin(input_ids, torch.tensor(self.aa_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.aa_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
 
         input_ids = input_ids.unsqueeze(0).to(self.device)
 
@@ -323,8 +320,8 @@ class EntropyMatrix(nn.Module):
             if self.fast:
                 fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
             else:
-                fx_h = torch.zeros((ln,num_tokens,ln,num_tokens),dtype=torch.float32)
-                x = torch.tile(x,[num_tokens,1])
+                fx_h = torch.zeros((ln, num_tokens, ln, num_tokens), dtype=torch.float32)
+                x = torch.tile(x, [num_tokens, 1])
 
             for n in range(ln): # for each position
                 x_h = torch.clone(x)
@@ -359,9 +356,8 @@ class EntropyMatrix(nn.Module):
                 entropy_m = entropy_m.cpu().detach().numpy().squeeze(1)
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Entropy.npy", entropy_m)
 
-            # Detect the PPI signal in the CJ
-            print(x['concat_id'][i])
-            ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i])
+            # Detect the PPI signal in the entropy matrix
+            ppi_pred, ppi_lab = self.detect_ppi(entropy_m, x['length1'][i], padding=0.1)
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
 
@@ -371,6 +367,80 @@ class EntropyMatrix(nn.Module):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+
+class EmbeddingsMatrix(nn.Module):
+    def __init__(self, fast: bool, matrix_path: str):
+        super().__init__()
+        self.fast = fast
+        self.type = 'fast' if(self.fast) else 'full'
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        model_path = "./gLM2_650M"
+        self.model = AutoModelForMaskedLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.matrix_path = matrix_path
+        pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
+
+    def get_matrix(self, sequence: str, length1: int):
+        all_tokens = self.nuc_tokens + self.aa_tokens
+        num_tokens = len(all_tokens)
+
+        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
+
+        input_ids = input_ids.unsqueeze(0).to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
+            # TODO: have to check if this line works (was based on the example in HuggingFace / GitHub)
+            f = lambda x: self.model(x, output_hidden_states=True).last_hidden_state.cpu().float()
+
+            x = torch.clone(input_ids).to(self.device)
+            ln = x.shape[1]
+
+            fx = f(x)[0]
+            if self.fast:
+                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
+            else:
+                fx_h = torch.zeros((ln, num_tokens, ln, num_tokens), dtype=torch.float32)
+                x = torch.tile(x, [num_tokens, 1])
+
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if self.fast:
+                    x_h[:, n] = self.MASK_TOKEN_ID
+                else:
+                    x_h[:, n] = torch.tensor(all_tokens)
+                fx_h[n] = f(x_h)
+
+            # TODO: implement the distance matrix between the embeddings
+            dist_m = None
+            
+        return dist_m
+
+    def forward(self, x):
+        ppi_preds = []
+        ppi_labs = []
+
+        for i, s in enumerate(x['sequence']):
+            if(self.is_computed(x['concat_id'][i])):
+                # Load the already computed matrix
+                emb_m = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy")
+            else:
+                emb_m = self.get_matrix(s, x['length1'][i])
+                emb_m = emb_m.cpu().detach().numpy().squeeze(1)
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy", emb_m)
+
+            # Detect the PPI signal in the embedding matrix
+            print(x['concat_id'][i])
+            ppi_pred, ppi_lab = self.detect_ppi(emb_m, x['length1'][i])
+            ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab) 
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
