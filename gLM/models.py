@@ -475,6 +475,25 @@ class EmbeddingsMatrix(nn.Module):
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
+    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3):
+        if mode == "IQR":
+            Q1 = np.percentile(upper_right_quadrant, 25)
+            Q3 = np.percentile(upper_right_quadrant, 75)
+            IQR = Q3-Q1
+            threshold = Q3+1.5*IQR
+
+        elif mode == "mean_stddev":
+            m = np.mean(upper_right_quadrant)
+            s = np.std(upper_right_quadrant)
+            threshold = m+n*s
+
+        elif mode == "P95":
+            threshold = max(np.percentile(upper_right_quadrant, 95), 0.1)
+
+        count_above_threshold = np.sum(upper_right_quadrant > threshold)
+
+        return count_above_threshold
+
     def detect_ppi(self, array, len1, padding=0.1):
         # Calculate the number of residues to ignore
         ignore_len1 = int(len1*padding)
@@ -553,7 +572,6 @@ class EmbeddingsMatrix(nn.Module):
                     x_h[:, n] = torch.tensor(all_tokens)
                 fx_h[n] = f(x_h)
 
-            # TODO: implement the distance matrix between the embeddings
             emb_jac = fx_h-fx
 
             contact = self.jac_to_contact(emb_jac.numpy())
@@ -596,10 +614,10 @@ class EmbeddingsMatrix(nn.Module):
                 pivot_df = pivot_df.sort_index()
 
                 # Convert the pivot table to a 2D numpy array
-                array_2d = pivot_df.to_numpy()
-                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy", array_2d)
+                emb_m = pivot_df.to_numpy()
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy", emb_m)
 
-            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
+            ppi_pred, ppi_lab = self.detect_ppi(emb_m, x['length1'][i])
 
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab)
