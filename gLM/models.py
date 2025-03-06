@@ -368,6 +368,74 @@ class EntropyMatrix(nn.Module):
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
+
+class Entropy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
+        self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        model_path = "./gLM2_650M"
+        self.model = AutoModelForMaskedLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+    def forward(self, x):
+        ppi_preds = []
+        ppi_labs = []
+
+        for i, s in enumerate(x['sequence']):
+            # Detect the PPI signal in the entropy matrix
+            ppi_pred, ppi_lab = self.average_entropy(s)
+            ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab) 
+
+        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
+    
+    def get_entropy(self, sequence: str):
+        all_tokens = self.nuc_tokens + self.aa_tokens
+        num_tokens = len(all_tokens)
+
+        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
+        input_ids = input_ids.unsqueeze(0).to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
+            f = lambda x: self.model(x)[0][..., all_tokens].cpu().float()
+
+            x = torch.clone(input_ids).to(self.device)
+            fx = f(x)[0]
+
+            probx = torch.nn.functional.softmax(fx, dim=1)
+            entropy = Categorical(probs=probx).entropy()
+            max_entropy = Categorical(probs=torch.FloatTensor([1/num_tokens]*num_tokens)).entropy()
+            entropy = (entropy)/max_entropy
+            
+        return entropy
+
+    def average_entropy(self, sequence: str):
+        # Compute average entropy
+        seq_entropy = self.get_entropy(sequence)
+        ppi = np.average(seq_entropy)
+
+        # Just a placeholder 
+        ppi_lab = 0
+        
+        # Detecting the PPI signal in upper right quadrant of matrix
+        return ppi, ppi_lab
+
+    def compute_loss(self, x):
+        predictions = x['predictions']
+        pred_labels = x['predicted_label']
+        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+
+
+
 class EmbeddingsMatrix(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
