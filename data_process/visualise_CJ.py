@@ -40,18 +40,14 @@ def create_figure(array_2d, output, len1):
     # array_2d - [NumPy array 2D] with logits
 
     # Normalize the data using the MinMax normalization and creating the colourmap
-    vmin = array_2d.min()
-    vmax = np.percentile(array_2d, 99)
-    norm = Normalize(vmin=vmin, vmax=vmax)
 
     cmap = plt.get_cmap("Blues")
-    blues = [cmap(i) for i in np.linspace(0, 1, 256)]
-    custom_cmap = LinearSegmentedColormap.from_list("custom_blues", blues, N=256)
 
     # Plot the heatmap
     fig, ax = plt.subplots()
     ax.invert_yaxis()
-    cax = ax.imshow(array_2d, cmap=custom_cmap, norm=norm, aspect='auto', interpolation='none')
+    cax = ax.imshow(array_2d, cmap=cmap, aspect='auto', vmin=np.min(array_2d), 
+        vmax=np.percentile(array_2d, 99), interpolation='none')
 
     # Add a red line at the last position of the first protein
     ax.axvline(x=len1-0.5, color='red', linestyle='--', linewidth=0.5)
