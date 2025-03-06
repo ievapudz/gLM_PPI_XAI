@@ -41,13 +41,12 @@ def get_protein_length(length_list, complex_id):
 def create_figure(array_2d, output, len1):
     # array_2d - [NumPy array 2D] with deltas in entropies
 
-    #cmap = plt.get_cmap("bwr")
     cmap = plt.get_cmap("Blues")
 
     # Plot the heatmap
     fig, ax = plt.subplots()
-    #cax = ax.imshow(array_2d, cmap=cmap, aspect='auto', interpolation='none', vmin=-1, vmax=1)
-    cax = ax.imshow(array_2d, cmap=cmap, aspect='auto', interpolation='none')
+    cax = ax.imshow(array_2d, cmap=cmap, aspect='auto', vmin=np.min(array_2d), 
+        vmax=np.percentile(array_2d, 99), interpolation='none')
 
     # Add a red line at the last position of the first protein
     ax.axvline(x=len1-0.5, color='black', linestyle='--', linewidth=0.5)

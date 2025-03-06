@@ -369,8 +369,8 @@ class MutationEntropyMatrix(nn.Module):
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
 
-class EntropyMatrix(nn.Module):
-    def __init__(self):
+class EntropyFactors(nn.Module):
+    def __init__(self, matrix_path: str):
         super().__init__()
         self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
         self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
@@ -389,7 +389,7 @@ class EntropyMatrix(nn.Module):
         self.matrix_path = matrix_path
 
     def is_computed(self, id):
-        m_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.type}EntropyFactors.npy")
+        m_path = pathlib.Path(f"{self.matrix_path}/{id}_EntropyFactors.npy")
         if(m_path.is_file() and m_path.stat().st_size != 0):
             return True
 
@@ -398,18 +398,20 @@ class EntropyMatrix(nn.Module):
         ppi_labs = []
 
         for i, s in enumerate(x['sequence']):
+            # Get entropy of the sequence
+            seq_entropy = self.get_entropy(s)
+            ppi_pred, ppi_lab = self.average_entropy(seq_entropy)
+            ppi_preds.append(ppi_pred) 
+            ppi_labs.append(ppi_lab)
+
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
-                entropy_f = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}EntropyFactors.npy")
+                entropy_f = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_EntropyFactors.npy")
             else:
-                entropy_f = self.get_matrix(s, x['length1'][i])
-                entropy_m = entropy_m.cpu().detach().numpy().squeeze(1)
-                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}EntropyFactors.npy", entropy_m)
+                # Get entropy factors
+                entropy_f = self.get_matrix(seq_entropy)
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_EntropyFactors.npy", entropy_f)
             
-            ppi_pred, ppi_lab = self.average_entropy(s)
-            ppi_preds.append(ppi_pred) 
-            ppi_labs.append(ppi_lab) 
-
         return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
     
     def get_entropy(self, sequence: str):
@@ -432,9 +434,8 @@ class EntropyMatrix(nn.Module):
             
         return entropy
 
-    def average_entropy(self, sequence: str):
+    def average_entropy(self, seq_entropy):
         # Compute average entropy
-        seq_entropy = self.get_entropy(sequence)
         ppi = np.average(seq_entropy)
 
         # Just a placeholder 
@@ -443,8 +444,8 @@ class EntropyMatrix(nn.Module):
         # Detecting the PPI signal in upper right quadrant of matrix
         return ppi, ppi_lab
 
-    def get_entropy_factors(self, seq_entropy):
-        return 1 - numpy.outer(np.array(seq_entropy), np.array(seq_entropy))
+    def get_matrix(self, seq_entropy):
+        return 1 - np.outer(np.array(seq_entropy), np.array(seq_entropy))
 
     def compute_loss(self, x):
         predictions = x['predictions']
