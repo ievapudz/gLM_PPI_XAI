@@ -3,7 +3,9 @@ model:
     class_path: gLM.models.gLM2
     init_args:
         model: 
-            class_path: gLM.models.Entropy
+            class_path: gLM.models.EntropyMatrix
+            init_args:
+                matrix_path: ./outputs/entropy_matrices/
 data:
     class_path: gLM.dataloader.SequencePairDataModule
     init_args:

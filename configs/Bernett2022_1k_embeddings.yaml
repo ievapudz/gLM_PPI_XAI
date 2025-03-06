@@ -3,10 +3,10 @@ model:
     class_path: gLM.models.gLM2
     init_args:
         model: 
-            class_path: gLM.models.MutationEntropyMatrix
+            class_path: gLM.models.EmbeddingsMatrix
             init_args:
                 fast: true
-                matrix_path: ./outputs/entropy_matrices/
+                matrix_path: ./outputs/embeddings_matrices/
 data:
     class_path: gLM.dataloader.SequencePairDataModule
     init_args:

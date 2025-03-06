@@ -3,7 +3,7 @@ model:
     class_path: gLM.models.gLM2
     init_args:
         model: 
-            class_path: gLM.models.EntropyMatrix
+            class_path: gLM.models.MutationEntropyMatrix
             init_args:
                 fast: true
                 matrix_path: ./outputs/entropy_matrices/

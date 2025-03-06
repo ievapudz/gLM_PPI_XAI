@@ -3,15 +3,15 @@ model:
     class_path: gLM.models.gLM2
     init_args:
         model: 
-            class_path: gLM.models.MutationEntropyMatrix
+            class_path: gLM.models.EmbeddingsMatrix
             init_args:
                 fast: true
-                matrix_path: ./outputs/entropy_matrices/
+                matrix_path: ./outputs/embeddings_matrices/
 data:
     class_path: gLM.dataloader.SequencePairDataModule
     init_args:
-        fasta_file: ./data/Bernett2022/human_swissprot_oneliner.fasta
-        data_folder: ./data/Bernett2022/
+        fasta_file: ./data/ModAC/sequences.fasta
+        data_folder: ./data/ModAC/
         batch_size: 4096
         positive_only: false
         num_workers: 0
@@ -30,7 +30,7 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'Bernett2022_1k_entropy'
+            name: 'ModAC'
             log_model: false
             prefix: ''
     enable_checkpointing: true
@@ -52,11 +52,13 @@ trainer:
           make_correct_dim: true
           metrics_to_plot:
             - confusion_matrix
+            - pr
+            - pr_curve
+            - roc
+            - roc_curve
             - class_proportions
             - calibration_curves
             - classification_report
-            - mcc
-            - roc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
             dirpath: logs/checkpoints/optimized/
@@ -65,7 +67,3 @@ trainer:
             mode: min
             save_last: true
             save_top_k: 1
-
-
-
-

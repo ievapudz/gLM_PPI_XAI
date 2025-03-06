@@ -233,7 +233,7 @@ class CategoricalJacobian(nn.Module):
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
-class EntropyMatrix(nn.Module):
+class MutationEntropyMatrix(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
         self.fast = fast
@@ -369,7 +369,7 @@ class EntropyMatrix(nn.Module):
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
 
-class Entropy(nn.Module):
+class EntropyMatrix(nn.Module):
     def __init__(self):
         super().__init__()
         self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
@@ -386,12 +386,26 @@ class Entropy(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
 
+        self.matrix_path = matrix_path
+
+    def is_computed(self, id):
+        m_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.type}EntropyFactors.npy")
+        if(m_path.is_file() and m_path.stat().st_size != 0):
+            return True
+
     def forward(self, x):
         ppi_preds = []
         ppi_labs = []
 
         for i, s in enumerate(x['sequence']):
-            # Detect the PPI signal in the entropy matrix
+            if(self.is_computed(x['concat_id'][i])):
+                # Load the already computed matrix
+                entropy_f = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}EntropyFactors.npy")
+            else:
+                entropy_f = self.get_matrix(s, x['length1'][i])
+                entropy_m = entropy_m.cpu().detach().numpy().squeeze(1)
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}EntropyFactors.npy", entropy_m)
+            
             ppi_pred, ppi_lab = self.average_entropy(s)
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
@@ -429,16 +443,21 @@ class Entropy(nn.Module):
         # Detecting the PPI signal in upper right quadrant of matrix
         return ppi, ppi_lab
 
+    def get_entropy_factors(self, seq_entropy):
+        return 1 - numpy.outer(np.array(seq_entropy), np.array(seq_entropy))
+
     def compute_loss(self, x):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
-
-
 class EmbeddingsMatrix(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
+        # TODO: check if these could be removed
+        self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
+        self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
+        self.emb_dim = 1280
         self.fast = fast
         self.type = 'fast' if(self.fast) else 'full'
 
@@ -456,7 +475,56 @@ class EmbeddingsMatrix(nn.Module):
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
+    def detect_ppi(self, array, len1, padding=0.1):
+        # Calculate the number of residues to ignore
+        ignore_len1 = int(len1*padding)
+        ignore_len2 = int((array.shape[0]-len1)*padding)
+
+        # Detecting the PPI signal in upper right quadrant of matrix
+        upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+        quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
+
+        # Detect outliers
+        ppi = self.outlier_count(upper_right_quadrant, mode="IQR")/quadrant_size
+
+        # Just a placeholder for the counting stage
+        ppi_lab = 0
+        
+        # Detecting the PPI signal in upper right quadrant of matrix
+        return ppi, ppi_lab
+
+    def jac_to_contact(self, emb_jac, symm=True, center=True, diag="remove", apc=True):
+        X = emb_jac.copy()
+        Lx, Ax, Ly, Ay = X.shape
+
+        if center:
+            for i in range(4):
+                if X.shape[i] > 1:
+                    X -= X.mean(i, keepdims=True)
+
+        contacts = np.sqrt(np.square(X).sum((1,3)))
+
+        if symm and (Ax != self.emb_dim or Ay != self.emb_dim):
+            contacts = (contacts + contacts.T)/2
+
+        if diag == "remove":
+            np.fill_diagonal(contacts,0)
+
+        if diag == "normalize":
+            contacts_diag = np.diag(contacts)
+            contacts = contacts/np.sqrt(contacts_diag[:,None]*contacts_diag[None,:])
+
+        if apc:
+            ap = contacts.sum(0,keepdims=True)*contacts.sum(1, keepdims=True)/contacts.sum()
+            contacts = contacts - ap
+
+        if diag == "remove":
+            np.fill_diagonal(contacts,0)
+
+        return contacts
+
     def get_matrix(self, sequence: str, length1: int):
+        # TODO: check if these could be removed
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
 
@@ -465,18 +533,17 @@ class EmbeddingsMatrix(nn.Module):
         input_ids = input_ids.unsqueeze(0).to(self.device)
 
         with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
-            # TODO: have to check if this line works (was based on the example in HuggingFace / GitHub)
-            f = lambda x: self.model(x, output_hidden_states=True).last_hidden_state.cpu().float()
+            f = lambda x: self.model(x, output_hidden_states=True).hidden_states[-1].cpu().float()
 
             x = torch.clone(input_ids).to(self.device)
             ln = x.shape[1]
 
             fx = f(x)[0]
             if self.fast:
-                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
+                fx_h = torch.zeros((ln, 1, ln, self.emb_dim), dtype=torch.float32)
             else:
-                fx_h = torch.zeros((ln, num_tokens, ln, num_tokens), dtype=torch.float32)
-                x = torch.tile(x, [num_tokens, 1])
+                fx_h = torch.zeros((ln, self.emb_dim, ln, self.emb_dim), dtype=torch.float32)
+                x = torch.tile(x, [emb_dim, 1])
 
             for n in range(ln): # for each position
                 x_h = torch.clone(x)
@@ -487,9 +554,24 @@ class EmbeddingsMatrix(nn.Module):
                 fx_h[n] = f(x_h)
 
             # TODO: implement the distance matrix between the embeddings
-            dist_m = None
-            
-        return dist_m
+            emb_jac = fx_h-fx
+
+            contact = self.jac_to_contact(emb_jac.numpy())
+
+        return emb_jac, contact
+
+    def contact_to_dataframe(self, con):
+        sequence_length = con.shape[0]
+        idx = [str(i) for i in np.arange(1, sequence_length+1)]
+        df = pd.DataFrame(con, index=idx, columns=idx)
+        df = df.stack().reset_index()
+        df.columns = ['i', 'j', 'value']
+        return df
+
+    def is_computed(self, id):
+        m_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.type}Emb.npy")
+        if(m_path.is_file() and m_path.stat().st_size != 0):
+            return True
 
     def forward(self, x):
         ppi_preds = []
@@ -500,15 +582,34 @@ class EmbeddingsMatrix(nn.Module):
                 # Load the already computed matrix
                 emb_m = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy")
             else:
-                emb_m = self.get_matrix(s, x['length1'][i])
-                emb_m = emb_m.cpu().detach().numpy().squeeze(1)
-                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy", emb_m)
+                emb_m, contact = self.get_matrix(s, x['length1'][i])
+                df = self.contact_to_dataframe(contact)
+                # TODO: perhaps this chunk of code could be optimized?
+                pivot_df = df.pivot(index='i', columns='j', values='value')
 
-            # Detect the PPI signal in the embedding matrix
-            print(x['concat_id'][i])
-            ppi_pred, ppi_lab = self.detect_ppi(emb_m, x['length1'][i])
+                sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
+                sorted_cols = [str(item) for item in sorted_cols]
+                pivot_df = pivot_df[sorted_cols]
+
+                # Sorting the rows
+                pivot_df.index = pivot_df.index.astype(int)
+                pivot_df = pivot_df.sort_index()
+
+                # Convert the pivot table to a 2D numpy array
+                array_2d = pivot_df.to_numpy()
+                np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.type}Emb.npy", array_2d)
+
+            ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
+
             ppi_preds.append(ppi_pred) 
-            ppi_labs.append(ppi_lab) 
+            ppi_labs.append(ppi_lab)
+
+        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
+
+    def compute_loss(self, x):
+        predictions = x['predictions']
+        pred_labels = x['predicted_label']
+        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
