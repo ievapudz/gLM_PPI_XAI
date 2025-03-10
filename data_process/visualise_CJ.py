@@ -35,7 +35,61 @@ def get_protein_length(length_list, complex_id):
     
     # Return the length of the first protein
     return lengths.get(first_protein_id, None)
+
+def apply_z_scores(array_2d, len1):
+    quadrant = array_2d
+
+    z_rows = (quadrant-quadrant.mean(axis=1, keepdims=True))/quadrant.std(axis=1, keepdims=True)
+    z_cols = (quadrant-quadrant.mean(axis=0, keepdims=True))/quadrant.std(axis=0, keepdims=True)
     
+    array_2d = (z_rows+z_cols)/2
+
+    return array_2d
+
+def apply_patching(array_2d, len1):
+    import scipy.ndimage as ndimage
+
+    quadrant = array_2d[:len1, len1:]
+    gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=3)
+    mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=25)
+    array_2d[:len1, len1:] = mean_filtered
+
+    return array_2d
+
+def outlier_count(upper_right_quadrant, mode="IQR", n=3):
+    if mode == "IQR":
+        Q1 = np.percentile(upper_right_quadrant, 25)
+        Q3 = np.percentile(upper_right_quadrant, 75)
+        IQR = Q3-Q1
+        threshold = Q3+1.5*IQR
+
+    elif mode == "mean_stddev":
+        m = np.mean(upper_right_quadrant)
+        s = np.std(upper_right_quadrant)
+        threshold = m+n*s
+
+    count_above_threshold = np.sum(upper_right_quadrant > threshold)
+
+    return count_above_threshold
+
+def detect_ppi(array_2d, len1, padding=0.1):
+    # Calculate the number of residues to ignore
+    ignore_len1 = int(len1*padding)
+    ignore_len2 = int((array_2d.shape[0]-len1)*padding)
+
+    # Detecting the PPI signal in upper right quadrant of matrix
+    upper_right_quadrant = array_2d[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
+    quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
+
+    # Detect outliers
+    ppi = outlier_count(upper_right_quadrant, mode="mean_stddev", n=3)
+
+    # Just a placeholder for the counting stage
+    ppi_lab = 1 if(ppi) else 0
+    
+    # Detecting the PPI signal in upper right quadrant of matrix
+    return ppi, ppi_lab
+
 def create_figure(array_2d, output, len1):
     # array_2d - [NumPy array 2D] with logits
 
@@ -71,7 +125,14 @@ def create_figure(array_2d, output, len1):
 
 array_2d = np.load(f"{MATRIX_PATH}/{options.input}_{MATRIX_SUFFIX}")
 
-# Example usage
 length1 = get_protein_length(options.length_list, options.input)
+
+corr_factors = np.load(f"outputs/entropy_factors/{options.input}_EntropyFactors.npy")
+array_2d = np.multiply(array_2d, corr_factors)
+array_2d = apply_z_scores(array_2d, length1)
+array_2d = apply_patching(array_2d, length1)
+
+ppi, ppi_lab = detect_ppi(array_2d, length1, padding=0.1)
+print("PPI prediction: ", ppi, ppi_lab)
 
 create_figure(array_2d, f"{PNG_PATH}/{options.input}_{PNG_SUFFIX}", length1)

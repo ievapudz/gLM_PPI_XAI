@@ -10,6 +10,7 @@ from pytorch_lightning import Trainer
 import pathlib
 from scipy.ndimage import gaussian_filter1d
 from torch.distributions import Categorical
+import scipy.ndimage as ndimage
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
@@ -179,13 +180,31 @@ class CategoricalJacobian(nn.Module):
         quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(upper_right_quadrant, mode="IQR")/quadrant_size
+        ppi = self.outlier_count(upper_right_quadrant, mode="mean_stddev", n=3)/quadrant_size
 
         # Just a placeholder for the counting stage
-        ppi_lab = 0
+        ppi_lab = 1 if(ppi) else 0
         
         # Detecting the PPI signal in upper right quadrant of matrix
         return ppi, ppi_lab
+
+    def apply_z_scores(self, array_2d):
+        quadrant = array_2d
+
+        z_rows = (quadrant-quadrant.mean(axis=1, keepdims=True))/quadrant.std(axis=1, keepdims=True)
+        z_cols = (quadrant-quadrant.mean(axis=0, keepdims=True))/quadrant.std(axis=0, keepdims=True)
+        
+        array_2d = (z_rows+z_cols)/2
+
+        return array_2d
+
+    def apply_patching(self, array_2d, len1):
+        quadrant = array_2d[:len1, len1:]
+        gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=3)
+        mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=25)
+        array_2d[:len1, len1:] = mean_filtered
+
+        return array_2d
 
     def forward(self, x):
         sigmoid_v = np.vectorize(self.sigmoid)
@@ -202,6 +221,8 @@ class CategoricalJacobian(nn.Module):
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
+                # TODO: make it less hacky if it scores better 
+                corr_factors = np.load(f"outputs/entropy_factors/{x['concat_id'][i]}_EntropyFactors.npy")
             else:
                 J, contact, tokens = self.get_categorical_jacobian(s, x['length1'][i])
                 df = self.contact_to_dataframe(contact)
@@ -222,6 +243,10 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
+            array_2d = np.multiply(array_2d, corr_factors)
+            array_2d = self.apply_z_scores(array_2d)
+            array_2d = self.apply_patching(array_2d, x['length1'][i])
+
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
