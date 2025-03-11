@@ -154,7 +154,7 @@ class CategoricalJacobian(nn.Module):
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
 
-    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3):
+    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3, denominator=1e-8):
         if mode == "IQR":
             Q1 = np.percentile(upper_right_quadrant, 25)
             Q3 = np.percentile(upper_right_quadrant, 75)
@@ -165,6 +165,10 @@ class CategoricalJacobian(nn.Module):
             m = np.mean(upper_right_quadrant)
             s = np.std(upper_right_quadrant)
             threshold = m+n*s
+
+        elif mode == "ratio":
+            threshold = 0.7
+            upper_right_quadrant /= denominator
 
         count_above_threshold = np.sum(upper_right_quadrant > threshold)
 
@@ -200,8 +204,8 @@ class CategoricalJacobian(nn.Module):
 
     def apply_patching(self, array_2d, len1):
         quadrant = array_2d[:len1, len1:]
-        gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=3)
-        mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=25)
+        gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=1)
+        mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=5)
         array_2d[:len1, len1:] = mean_filtered
 
         return array_2d
@@ -221,8 +225,6 @@ class CategoricalJacobian(nn.Module):
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
-                # TODO: make it less hacky if it scores better 
-                corr_factors = np.load(f"outputs/entropy_factors/{x['concat_id'][i]}_EntropyFactors.npy")
             else:
                 J, contact, tokens = self.get_categorical_jacobian(s, x['length1'][i])
                 df = self.contact_to_dataframe(contact)
@@ -243,10 +245,8 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            array_2d = np.multiply(array_2d, corr_factors)
-            array_2d = self.apply_z_scores(array_2d)
-            array_2d = self.apply_patching(array_2d, x['length1'][i])
-
+            array_2d = self.apply_z_scores(array_2d, length1)
+            array_2d = self.apply_patching(array_2d, length1)
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 

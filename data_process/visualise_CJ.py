@@ -50,13 +50,13 @@ def apply_patching(array_2d, len1):
     import scipy.ndimage as ndimage
 
     quadrant = array_2d[:len1, len1:]
-    gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=3)
-    mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=25)
-    array_2d[:len1, len1:] = mean_filtered
+    quadrant = ndimage.gaussian_filter(quadrant, sigma=1)
+    quadrant = ndimage.uniform_filter(quadrant, size=5)
+    array_2d[:len1, len1:] = quadrant
 
     return array_2d
 
-def outlier_count(upper_right_quadrant, mode="IQR", n=3):
+def outlier_count(upper_right_quadrant, mode="IQR", n=3, denominator=1e-8):
     if mode == "IQR":
         Q1 = np.percentile(upper_right_quadrant, 25)
         Q3 = np.percentile(upper_right_quadrant, 75)
@@ -68,12 +68,17 @@ def outlier_count(upper_right_quadrant, mode="IQR", n=3):
         s = np.std(upper_right_quadrant)
         threshold = m+n*s
 
+    elif mode == "ratio":
+        threshold = 0.7
+        upper_right_quadrant /= denominator
+
     count_above_threshold = np.sum(upper_right_quadrant > threshold)
 
     return count_above_threshold
 
 def detect_ppi(array_2d, len1, padding=0.1):
     # Calculate the number of residues to ignore
+
     ignore_len1 = int(len1*padding)
     ignore_len2 = int((array_2d.shape[0]-len1)*padding)
 
@@ -127,8 +132,8 @@ array_2d = np.load(f"{MATRIX_PATH}/{options.input}_{MATRIX_SUFFIX}")
 
 length1 = get_protein_length(options.length_list, options.input)
 
-corr_factors = np.load(f"outputs/entropy_factors/{options.input}_EntropyFactors.npy")
-array_2d = np.multiply(array_2d, corr_factors)
+#corr_factors = np.load(f"outputs/entropy_factors/{options.input}_EntropyFactors.npy")
+#array_2d = np.multiply(array_2d, corr_factors)
 array_2d = apply_z_scores(array_2d, length1)
 array_2d = apply_patching(array_2d, length1)
 
