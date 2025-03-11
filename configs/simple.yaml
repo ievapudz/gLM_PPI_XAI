@@ -45,19 +45,18 @@ trainer:
           - 'Negative'
           - 'Positive'
           y_pred_key: predictions
-          y_true_key: label
+          y_pred_lab_key: predicted_label
+          y_true_lab_key: label
           make_one_hot: true
           invert_probabilities: true
           make_correct_dim: true
           metrics_to_plot:
             - confusion_matrix
-            - pr
-            - pr_curve
-            - roc
-            - roc_curve
             - class_proportions
             - calibration_curves
             - classification_report
+            - mcc
+            - roc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
             dirpath: logs/checkpoints/optimized/
