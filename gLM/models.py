@@ -89,6 +89,64 @@ class CategoricalJacobian(nn.Module):
             np.fill_diagonal(contacts,0)
 
         return contacts
+    
+    def get_cosine_categorical_jacobian(self, sequence: str, length1: int):
+        all_tokens = self.nuc_tokens + self.aa_tokens
+        num_tokens = len(all_tokens)
+
+        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
+        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+        seqlen = input_ids.shape[0]
+        
+        # [seqlen, 1].
+        is_nuc_pos = torch.isin(input_ids, torch.tensor(self.nuc_tokens)).view(-1, 1)
+        # [1, num_tokens].
+        is_nuc_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.nuc_tokens)).view(1, -1)
+        # [seqlen, 1].
+        is_aa_pos = torch.isin(input_ids, torch.tensor(self.aa_tokens)).view(-1, 1)
+        # [1, num_tokens].
+        is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.aa_tokens)).view(1, -1)
+
+        input_ids = input_ids.unsqueeze(0).to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
+            f = lambda x: self.model(x)[0][..., all_tokens].cpu().float()
+
+            x = torch.clone(input_ids).to(self.device)
+            ln = x.shape[1]
+
+            fx = f(x)[0]
+            if self.fast:
+                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
+            else:
+                fx_h = torch.zeros((ln, num_tokens, ln, num_tokens), dtype=torch.float32)
+                x = torch.tile(x, [num_tokens, 1])
+
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if self.fast:
+                    x_h[:, n] = self.MASK_TOKEN_ID
+                else:
+                    x_h[:, n] = torch.tensor(all_tokens)
+                fx_h[n] = f(x_h)
+
+            # Zero out other modality
+            valid_nuc = is_nuc_pos & is_nuc_token
+            valid_aa = is_aa_pos & is_aa_token
+
+            fx_h = torch.where(valid_nuc | valid_aa, fx_h, 0.0)
+            fx = torch.where(valid_nuc | valid_aa, fx, 0.0)
+
+            fx_h = torch.squeeze(fx_h)
+            fx = torch.unsqueeze(fx, dim=0)
+
+            cos = torch.nn.CosineSimilarity(dim=2)
+            jac = cos(fx_h, fx)
+            jac = torch.ones_like(jac) - jac
+            
+            #contact = self.jac_to_contact(jac.numpy(), length1)
+
+        return jac, jac, tokens
 
     def get_categorical_jacobian(self, sequence: str, length1: int):
         all_tokens = self.nuc_tokens + self.aa_tokens
