@@ -245,8 +245,8 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            array_2d = self.apply_z_scores(array_2d, length1)
-            array_2d = self.apply_patching(array_2d, length1)
+            array_2d = self.apply_z_scores(array_2d, x['length1'][i])
+            array_2d = self.apply_patching(array_2d, x['length1'][i])
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
