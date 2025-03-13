@@ -15,7 +15,7 @@ class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
         wandb.watch(pl_module.model, log="all", log_graph=True, log_freq=1)
 
-def log_logit_classification_metrics(
+def log_classification_metrics(
     y_pred_lab,
     y_true_lab,
     prefix,
@@ -40,8 +40,14 @@ def log_logit_classification_metrics(
     if "mcc" in metrics_to_plot:
         log_dict[f"{prefix}_mcc"] = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
 
-    if "roc" in metrics_to_plot:
-        log_dict[f"{prefix}_roc"] = metrics.roc_auc_score(y_true_lab, y_pred)
+    if "roc" in metrics_to_plot or "roc_auc" in metrics_to_plot:
+        log_dict[f"{prefix}_roc_auc"] = metrics.roc_auc_score(y_true_lab, y_pred)
+
+    if "pr_auc" in metrics_to_plot:
+        precision, recall, _ = precision_recall_curve(y_true_lab, y_pred)
+        pr_auc = auc(recall, precision)
+
+        log_dict[f"{prefix}_pr_auc"] = pr_auc
 
     if "confusion_matrix" in metrics_to_plot:
         cm = confusion_matrix(y_true_lab, y_pred_lab)
@@ -84,130 +90,6 @@ def log_logit_classification_metrics(
         
     return log_dict
 
-
-def log_classification_metrics(
-    y_pred,
-    y_true,
-    y_true_key,
-    y_pred_key,
-    prefix,
-    trainer,
-    metrics_to_plot=[
-        "confusion_matrix",
-        "roc",
-        "pr",
-        "class_proportions",
-        "calibration_curves",
-        "classification_report",
-    ],
-    class_names=["Negative", "Positive"],
-    make_one_hot=False,
-    invert_probabilities=False,
-    make_correct_dim=False,
-):
-    if invert_probabilities:
-        y_pred = 1 - y_pred
-    if make_one_hot:
-        y_true = F.one_hot(y_true, num_classes=len(class_names))
-    if make_correct_dim:
-        y_pred = torch.stack([1 - y_pred, y_pred], dim=1)
-    y_pred_class = torch.argmax(y_pred, dim=1)
-    y_true_class = torch.argmax(y_true, dim=1).detach().cpu().numpy().astype(int)
-
-    y_pred = y_pred.cpu().detach()
-    y_pred_class = y_pred_class.cpu().detach()
-
-    log_dict = {}
-    suffix_title = f"{y_true_key} vs {y_pred_key}"
-    if "confusion_matrix" in metrics_to_plot:
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_confusion_matrix"] = wandb.plot.confusion_matrix(
-            probs=y_pred,
-            y_true=y_true_class,
-            class_names=class_names,
-            split_table=True,
-            title=f"{suffix_title} Confusion Matrix",
-        )
-
-    if "roc" in metrics_to_plot:
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_roc_auc"] = metrics.roc_auc_score(
-            y_true_class, y_pred[:, 1]
-        )
-
-    if "roc_curve" in metrics_to_plot:
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_roc"] = wandb.plot.roc_curve(
-            y_true_class,
-            y_pred,
-            labels=class_names,
-            split_table=True,
-            title=f"{suffix_title} ROC Curve",
-        )
-
-    if "pr" in metrics_to_plot:
-        # log the average precision value
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_average_precision"] = (
-            metrics.average_precision_score(y_true_class, y_pred[:, 1])
-        )
-
-    if "pr_curve" in metrics_to_plot:
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_pr"] = wandb.plot.pr_curve(
-            y_true_class,
-            y_pred,
-            labels=class_names,
-            split_table=True,
-            title=f"{suffix_title} PR Curve",
-        )
-
-    if "class_proportions" in metrics_to_plot:
-        num_classes = len(class_names)
-        class_counts = np.bincount(y_true_class, minlength=num_classes)
-        class_proportions = class_counts / len(y_true_class)
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_class_proportions"] = wandb.plot.bar(
-            wandb.Table(
-                data=[
-                    [class_names[i], class_proportions[i]] for i in range(num_classes)
-                ],
-                columns=["Class", "Proportion"],
-            ),
-            "Class",
-            "Proportion",
-            title=f"{suffix_title} Class Proportions",
-            split_table=True,
-        )
-
-    if "calibration_curves" in metrics_to_plot:
-        y_pred_np = np.minimum(np.maximum(y_pred.numpy(), 0), 1)
-        diagonal = np.linspace(0, 1, num=100)
-        xs, ys, keys = [diagonal], [diagonal], ["Perfect calibration"]
-        for i in range(num_classes):
-            prob_true, prob_pred = calibration_curve(
-                y_true_class == i, y_pred_np[:, i], n_bins=10
-            )
-            xs.append(prob_pred)
-            ys.append(prob_true)
-            keys.append(class_names[i])
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_calibration_curves"] = wandb.plot.line_series(
-            xs=xs,
-            ys=ys,
-            keys=keys,
-            title=f"{suffix_title} Calibration Curves",
-            xname="Mean predicted probability",
-            split_table=True,
-        )
-
-    if "classification_report" in metrics_to_plot:
-        class_report = metrics.classification_report(
-            y_true_class, y_pred_class, target_names=class_names
-        ).split("\n")
-        report_columns = ["Class", "Precision", "Recall", "F1-score", "Support"]
-        report_table = []
-        for line in class_report[2 : (num_classes + 2)]:
-            report_table.append(line.split())
-        log_dict[f"{prefix}_{y_pred_key}/{y_true_key}_classification_report"] = wandb.Table(
-            dataframe=pd.DataFrame(report_table, columns=report_columns)
-        )
-
-    return log_dict
-
 class OutputLoggingCallback(Callback):
     def __init__(self, log_every_n_steps=20):
         self.log_every_n_steps = log_every_n_steps
@@ -217,8 +99,8 @@ class OutputLoggingCallback(Callback):
         # Create a table with protein IDs, true labels, and predicted labels
         protein_ids = pl_module.step_outputs[split]['concat_id']
         true_labels = pl_module.step_outputs[split]['label']
-        predicted_labels = pl_module.step_outputs[split]['predicted_label']
-        predictions = pl_module.step_outputs[split]['predictions']
+        predicted_labels = pl_module.step_outputs[split]['predicted_label'].squeeze().numpy()
+        predictions = pl_module.step_outputs[split]['predictions'].squeeze().numpy()
 
         table_data = []
         for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
@@ -289,7 +171,7 @@ class LogClassificationMetrics(Callback):
         y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_lab_key]], dim=0)
         y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_lab_key]], dim=0)
 
-        log_dict = log_logit_classification_metrics(
+        log_dict = log_classification_metrics(
             y_pred_lab,
             y_true_lab,
             y_pred=y_pred,
