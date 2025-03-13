@@ -11,6 +11,7 @@ import pathlib
 from scipy.ndimage import gaussian_filter1d
 from torch.distributions import Categorical
 import scipy.ndimage as ndimage
+import os
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
@@ -741,20 +742,28 @@ class PooledEmbeddings(nn.Module):
         ) 
 
     def forward(self, batch):
-        emb = self.get_embeddings(batch)
+        emb = self.get_batch_embeddings(batch)
         ppi_preds = self.l(emb)
         ppi_labs = torch.round(ppi_preds).int()
 
         return torch.FloatTensor(ppi_preds), ppi_labs
-
-    def get_embeddings(self, batch):
-        # Generating embeddings
-        encodings = self.tokenizer(batch['sequence'], return_tensors='pt')
-        with torch.no_grad():
-            embeddings = self.model(encodings.input_ids.to(self.device), output_hidden_states=True).last_hidden_state
-            if(self.pool == "mean"): embeddings = embeddings.mean(dim=1)
-        return embeddings
     
+    def get_batch_embeddings(self, batch):
+        embeddings = torch.empty((len(batch['concat_id']), self.emb_dim)).to(self.device)
+
+        for i, concat_id in enumerate(batch['concat_id']):
+            embedding_path = os.path.join(self.emb_path, f'{concat_id}.pt')
+            if os.path.isfile(embedding_path):
+                embeddings[i] = torch.load(embedding_path).to(self.device).mean(dim=1)
+            else:
+                encoding = self.tokenizer(batch['sequence'][i], return_tensors='pt')
+                with torch.no_grad():
+                    embedding = self.model(encoding.input_ids.to(self.device), output_hidden_states=True).last_hidden_state
+                    torch.save(embedding, os.path.join(self.emb_path, f'{concat_id}.pt'))
+                    embeddings[i] = embedding.mean(dim=1)
+    
+        return embeddings
+
     def compute_loss(self, batch):
         loss = torch.nn.functional.binary_cross_entropy(
             batch['predictions'].detach().cpu().squeeze().float(), 
