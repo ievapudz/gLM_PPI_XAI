@@ -1,7 +1,7 @@
 from pytorch_lightning import LightningModule
 from torch import nn
 import torch
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
 import numpy as np
 import pandas as pd
 import math
@@ -29,6 +29,7 @@ class CategoricalJacobian(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
         self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+        print(self.MASK_TOKEN_ID)
 
         for param in self.model.parameters():
             param.requires_grad = False
@@ -646,7 +647,7 @@ class EmbeddingsMatrix(nn.Module):
                 fx_h = torch.zeros((ln, 1, ln, self.emb_dim), dtype=torch.float32)
             else:
                 fx_h = torch.zeros((ln, self.emb_dim, ln, self.emb_dim), dtype=torch.float32)
-                x = torch.tile(x, [emb_dim, 1])
+                x = torch.tile(x, [self.emb_dim, 1])
 
             for n in range(ln): # for each position
                 x_h = torch.clone(x)
@@ -712,6 +713,54 @@ class EmbeddingsMatrix(nn.Module):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+
+class PooledEmbeddings(nn.Module):
+    def __init__(self, emb_path: str):
+        super().__init__()
+        self.emb_dim = 1280
+        self.pool = "mean"
+        self.embeddings = None
+        self.emb_path = emb_path
+        pathlib.Path(self.emb_path).mkdir(parents=True, exist_ok=True)
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        model_path = "./gLM2_650M"
+        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.l = torch.nn.Sequential(
+            torch.nn.Linear(self.emb_dim, 640),
+            torch.nn.ReLU(),
+            torch.nn.Linear(640, 1),
+            torch.nn.Sigmoid()
+        ) 
+
+    def forward(self, batch):
+        emb = self.get_embeddings(batch)
+        ppi_preds = self.l(emb)
+        ppi_labs = torch.round(ppi_preds).int()
+
+        return torch.FloatTensor(ppi_preds), ppi_labs
+
+    def get_embeddings(self, batch):
+        # Generating embeddings
+        encodings = self.tokenizer(batch['sequence'], return_tensors='pt')
+        with torch.no_grad():
+            embeddings = self.model(encodings.input_ids.to(self.device), output_hidden_states=True).last_hidden_state
+            if(self.pool == "mean"): embeddings = embeddings.mean(dim=1)
+        return embeddings
+    
+    def compute_loss(self, batch):
+        loss = torch.nn.functional.binary_cross_entropy(
+            batch['predictions'].detach().cpu().squeeze().float(), 
+            batch['label'].detach().cpu().float()
+        )
+        return {'loss': loss}
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):

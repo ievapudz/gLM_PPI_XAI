@@ -20,12 +20,12 @@ def log_logit_classification_metrics(
     y_true_lab,
     prefix,
     trainer,
-    metrics_to_plot=[
+    metrics_to_plot=(
         "mcc",
         "confusion_matrix",
         "class_proportions",
         "classification_report",
-    ],
+    ),
     class_names=["Negative", "Positive"],
     y_pred=None
 ):
@@ -44,9 +44,15 @@ def log_logit_classification_metrics(
         log_dict[f"{prefix}_roc"] = metrics.roc_auc_score(y_true_lab, y_pred)
 
     if "confusion_matrix" in metrics_to_plot:
-        log_dict[f"{prefix}_confusion_matrix"] = wandb.plot.confusion_matrix(probs=None,
-            y_true=y_true_lab, preds=y_pred_lab,
-            class_names=class_names)
+        cm = confusion_matrix(y_true_lab, y_pred_lab)
+        # Extract TN, FP, FN, TP
+        tn, fp, fn, tp = cm.ravel()
+        
+        # Create a labeled confusion matrix
+        labeled_cm = np.array([['TN', tn], ['FP', fp], ['FN', fn], ['TP', tp]])
+
+        cm_df = pd.DataFrame(labeled_cm)
+        log_dict[f"{prefix}_confusion_matrix"] = wandb.Table(dataframe=cm_df)
 
     if "classification_report" in metrics_to_plot:
         class_report = metrics.classification_report(
