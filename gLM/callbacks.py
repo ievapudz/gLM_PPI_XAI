@@ -123,10 +123,10 @@ class OutputLoggingCallback(Callback):
         pl_module.step_outputs["train"].clear()
 
     def on_validation_epoch_start(self, trainer, pl_module):
-        pl_module.step_outputs["val"].clear()
+        pl_module.step_outputs["validate"].clear()
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        self.on_epoch_end(trainer, pl_module, 'val')
+        self.on_epoch_end(trainer, pl_module, 'validate')
 
     def on_test_epoch_start(self, trainer, pl_module):
         pl_module.step_outputs["test"].clear()
@@ -187,7 +187,7 @@ class LogClassificationMetrics(Callback):
         self.log_metrics(trainer, pl_module, "train")
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        self.log_metrics(trainer, pl_module, "val")
+        self.log_metrics(trainer, pl_module, "validate")
 
     def on_test_epoch_end(self, trainer, pl_module):
         self.log_metrics(trainer, pl_module, "test")

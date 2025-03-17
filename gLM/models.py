@@ -13,6 +13,8 @@ from torch.distributions import Categorical
 import scipy.ndimage as ndimage
 import os
 
+TOKENIZERS_PARALLELISM = True
+
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
@@ -30,7 +32,6 @@ class CategoricalJacobian(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
         self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
-        print(self.MASK_TOKEN_ID)
 
         for param in self.model.parameters():
             param.requires_grad = False
@@ -741,14 +742,18 @@ class PooledEmbeddings(nn.Module):
             torch.nn.Sigmoid()
         ) 
 
-    def forward(self, batch):
-        emb = self.get_batch_embeddings(batch)
-        ppi_preds = self.l(emb)
+    def forward(self, batch, batch_idx, stage):
+        emb = self.get_batch_embeddings(batch, batch_idx, stage)
+        
+        ppi_preds = self.l(emb).to("cpu")
         ppi_labs = torch.round(ppi_preds).int()
 
         return torch.FloatTensor(ppi_preds), ppi_labs
     
-    def get_batch_embeddings(self, batch):
+    def get_batch_embeddings(self, batch, batch_idx, stage):
+        embeddings = torch.load(f"{self.emb_path}/batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(self.device).mean(dim=1)
+
+        """
         embeddings = torch.empty((len(batch['concat_id']), self.emb_dim)).to(self.device)
 
         for i, concat_id in enumerate(batch['concat_id']):
@@ -761,7 +766,7 @@ class PooledEmbeddings(nn.Module):
                     embedding = self.model(encoding.input_ids.to(self.device), output_hidden_states=True).last_hidden_state
                     torch.save(embedding, os.path.join(self.emb_path, f'{concat_id}.pt'))
                     embeddings[i] = embedding.mean(dim=1)
-    
+        """
         return embeddings
 
     def compute_loss(self, batch):
@@ -778,9 +783,10 @@ class gLM2(LightningModule):
         self.save_hyperparameters()
         
     def step(self, batch, batch_idx, split):
-        batch['predictions'], batch['predicted_label'] = self.model(batch)
+        batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
     
         self.step_outputs[split] = batch
+
         losses = self.model.compute_loss(batch)
         for key, value in losses.items():
             self.log(f'{split}/{key}', value)
@@ -790,7 +796,7 @@ class gLM2(LightningModule):
         self.step(batch, batch_idx, 'train')
 
     def validation_step(self, batch, batch_idx):
-        self.step(batch, batch_idx, 'val')
+        self.step(batch, batch_idx, 'validate')
 
     def test_step(self, batch, batch_idx):
         self.step(batch, batch_idx, 'test')
