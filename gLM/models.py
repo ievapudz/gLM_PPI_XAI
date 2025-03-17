@@ -13,6 +13,8 @@ from torch.distributions import Categorical
 import scipy.ndimage as ndimage
 import os
 
+TOKENIZERS_PARALLELISM = True
+
 class CategoricalJacobian(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
         super().__init__()
@@ -30,7 +32,6 @@ class CategoricalJacobian(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
         self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
-        print(self.MASK_TOKEN_ID)
 
         for param in self.model.parameters():
             param.requires_grad = False
@@ -743,7 +744,7 @@ class PooledEmbeddings(nn.Module):
 
     def forward(self, batch):
         emb = self.get_batch_embeddings(batch)
-        ppi_preds = self.l(emb)
+        ppi_preds = self.l(emb).to("cpu")
         ppi_labs = torch.round(ppi_preds).int()
 
         return torch.FloatTensor(ppi_preds), ppi_labs
