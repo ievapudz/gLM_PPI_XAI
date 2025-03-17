@@ -721,19 +721,10 @@ class PooledEmbeddings(nn.Module):
         super().__init__()
         self.emb_dim = 1280
         self.pool = "mean"
-        self.embeddings = None
         self.emb_path = emb_path
         pathlib.Path(self.emb_path).mkdir(parents=True, exist_ok=True)
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-        model_path = "./gLM2_650M"
-        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
-
-        for param in self.model.parameters():
-            param.requires_grad = False
 
         self.l = torch.nn.Sequential(
             torch.nn.Linear(self.emb_dim, 640),
@@ -751,22 +742,10 @@ class PooledEmbeddings(nn.Module):
         return torch.FloatTensor(ppi_preds), ppi_labs
     
     def get_batch_embeddings(self, batch, batch_idx, stage):
-        embeddings = torch.load(f"{self.emb_path}/batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(self.device).mean(dim=1)
+        embeddings = torch.load(
+            f"{self.emb_path}/batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(
+            self.device).mean(dim=1)
 
-        """
-        embeddings = torch.empty((len(batch['concat_id']), self.emb_dim)).to(self.device)
-
-        for i, concat_id in enumerate(batch['concat_id']):
-            embedding_path = os.path.join(self.emb_path, f'{concat_id}.pt')
-            if os.path.isfile(embedding_path):
-                embeddings[i] = torch.load(embedding_path).to(self.device).mean(dim=1)
-            else:
-                encoding = self.tokenizer(batch['sequence'][i], return_tensors='pt')
-                with torch.no_grad():
-                    embedding = self.model(encoding.input_ids.to(self.device), output_hidden_states=True).last_hidden_state
-                    torch.save(embedding, os.path.join(self.emb_path, f'{concat_id}.pt'))
-                    embeddings[i] = embedding.mean(dim=1)
-        """
         return embeddings
 
     def compute_loss(self, batch):

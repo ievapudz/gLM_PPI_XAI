@@ -12,6 +12,8 @@ import mlflow
 
 warnings.filterwarnings('ignore')
 
+os.environ["WANDB_SILENT"] = "true"
+
 def main():
 	"""
 	Run with python main.py test -c configs/config.yaml

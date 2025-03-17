@@ -2,6 +2,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from Bio import SeqIO
 from data_process.Processor import Processor
+from data_process.EmbeddingsGenerator import EmbeddingsGenerator
 from pathlib import Path
 import os
 import torch
@@ -102,6 +103,15 @@ class SequencePairDataModule(LightningDataModule):
         if(not os.path.exists(self.batch_dir)): return False
         return any(f.startswith(stage_prefix) for f in os.listdir(self.batch_dir))
 
+    def exists_pt(self):
+        if(not os.path.exists(self.emb_dir)): return False
+        return any(file.endswith(".pt") for file in os.listdir(self.emb_dir))
+
+    def generate_embeddings(self, loader):
+        emb_generator = EmbeddingsGenerator(self.emb_dir)
+        for batch in loader:
+            emb_generator(batch)
+
     def save_batch_files(self, loader, stage="train"):
         os.makedirs(self.batch_dir, exist_ok=True)
 
@@ -129,6 +139,7 @@ class SequencePairDataModule(LightningDataModule):
             pin_memory=True,
         )
         if(not self.exists_batch(stage_prefix="train")):
+            if(not self.exists_pt()): self.generate_embeddings(loader)
             self.save_batch_files(loader, stage="train")
 
         return loader 
@@ -142,6 +153,7 @@ class SequencePairDataModule(LightningDataModule):
             pin_memory=True,
         )
         if(not self.exists_batch(stage_prefix="validate")):
+            if(not self.exists_pt()): self.generate_embeddings(loader)
             self.save_batch_files(loader, stage="validate")
         return loader 
 
@@ -154,6 +166,7 @@ class SequencePairDataModule(LightningDataModule):
             pin_memory=True,
         )
         if(not self.exists_batch(stage_prefix="test")):
+            if(not self.exists_pt()): self.generate_embeddings(loader)
             self.save_batch_files(loader, stage="test")
         return loader
 
