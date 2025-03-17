@@ -1,0 +1,63 @@
+Seed set to 42
+GPU available: False, used: False
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+
+  | Name  | Type             | Params | Mode 
+---------------------------------------------------
+0 | model | PooledEmbeddings | 820 K  | train
+---------------------------------------------------
+999 params
+999 params
+999 params
+999 params size (MB)
+6         Modules in train mode
+0         Modules in eval mode
+Num positive pairs: 1 
+Num negative pairs: 1
+Num positive pairs: 1 
+Num negative pairs: 1
+
+Sanity
+
+Sanity
+Sanity
+Sanity
+                                                                            
+Saved: ./tests/outputs/_001/batches/train_batch_0.pt [Batch size: 2]
+
+Training
+Training
+Epoch 999
+Epoch 999
+Epoch 999
+
+Validation
+[A
+
+Validation
+[A
+
+Validation
+[A
+
+Validation
+[A
+
+                                                                       
+[A
+Epoch 999
+Epoch 999
+
+Epoch 999
+
+[1;34mwandb
+[0m:
+
+[1;34mwandb
+[0m: You can sync this run to the cloud by running:
+
+[1;34mwandb
+[0m: 
+[1mwandb sync -
+[0m

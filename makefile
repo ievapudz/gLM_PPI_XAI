@@ -10,8 +10,6 @@ TEST_CASE_SCRIPTS = $(sort $(wildcard ${INPUT_TEST_DIR}/*.sh))
 TEST_CASE_OUTPUTS = ${TEST_CASE_SCRIPTS:${INPUT_TEST_DIR}/%.sh=${OUTPUT_TEST_DIR}/%.out}
 TEST_CASE_DIFFS   = ${TEST_CASE_SCRIPTS:${INPUT_TEST_DIR}/%.sh=${OUTPUT_TEST_DIR}/%.diff}
 
-PT_FILES = $(wildcard ${OUTPUT_TEST_DIR}/*.pt)
-
 .PHONY: all test check tests checks clean distclean mostlyclean cleanAll
 
 all: tests
@@ -26,6 +24,7 @@ test tests: ${TEST_CASE_DIFFS}
 ${OUTPUT_TEST_DIR}/%.diff: ${INPUT_TEST_DIR}/%.sh ${OUTPUT_TEST_DIR}/%.out
 	@$< 2>&1 | \
     sed 's/at \(.*\) line [0-9][0-9]*\./at \1 line 999\./' | \
+    sed 's/\x1b/\n/g' | sed 's/\r/\n/g' | \
     sed 's/\(.*\) params/999 params/' | \
     sed 's/Epoch \(.*\)/Epoch 999/' | \
     sed 's/Training\(:\|\s\)\(.*\)/Training/' | \
@@ -37,5 +36,3 @@ ${OUTPUT_TEST_DIR}/%.diff: ${INPUT_TEST_DIR}/%.sh ${OUTPUT_TEST_DIR}/%.out
 
 clean:
 	rm -f ${TEST_CASE_DIFFS}
-	rm ${PT_FILES}
-

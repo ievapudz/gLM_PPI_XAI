@@ -5,7 +5,7 @@ model:
         model: 
             class_path: gLM.models.PooledEmbeddings
             init_args:
-                emb_path: ./tests/outputs/_001/
+                emb_path: ./tests/outputs/_002/
 data:
     class_path: gLM.dataloader.SequencePairDataModule
     init_args:
@@ -15,8 +15,8 @@ data:
         positive_only: false
         num_workers: 0
         num_samples: null
-        emb_dir: ./tests/outputs/_001/
-        batch_dir: ./tests/outputs/_001/batches/
+        emb_dir: ./tests/outputs/_002/
+        batch_dir: ./tests/outputs/_002/batches/
 optimizer:
     class_path: torch.optim.Adam
     init_args:
@@ -64,7 +64,7 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: tests/outputs/_001/checkpoints/optimized/
+            dirpath: tests/outputs/_002/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
