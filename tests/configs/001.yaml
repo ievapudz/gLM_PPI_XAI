@@ -16,7 +16,7 @@ data:
         num_workers: 0
         num_samples: null
         emb_dir: ./tests/outputs/_001/
-        batch_dir: ./tests/outputs/_001/batches/
+        batch_dir: ./tests/outputs/_001/mean_batches/
 optimizer:
     class_path: torch.optim.Adam
     init_args:

@@ -743,8 +743,8 @@ class PooledEmbeddings(nn.Module):
     
     def get_batch_embeddings(self, batch, batch_idx, stage):
         embeddings = torch.load(
-            f"{self.emb_path}/batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(
-            self.device).mean(dim=1)
+            f"{self.emb_path}/{self.pool}_batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(
+            self.device)
 
         return embeddings
 

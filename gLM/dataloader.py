@@ -79,6 +79,8 @@ class SequencePairDataModule(LightningDataModule):
         self.emb_dir = emb_dir
         self.batch_dir = batch_dir
 
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
             self.train_dataset = SequencePairDataset(
@@ -112,7 +114,7 @@ class SequencePairDataModule(LightningDataModule):
         for batch in loader:
             emb_generator(batch)
 
-    def save_batch_files(self, loader, stage="train"):
+    def save_batch_files(self, loader, stage="train", pool="mean"):
         os.makedirs(self.batch_dir, exist_ok=True)
 
         for batch_idx, batch in enumerate(loader):
@@ -122,11 +124,11 @@ class SequencePairDataModule(LightningDataModule):
             }
             batch_path = os.path.join(self.batch_dir, f"{stage}_batch_{batch_idx}.pt")
             for pair_idx, pair in enumerate(batch["concat_id"]):
+                emb = torch.load(f"{self.emb_dir}/{pair}.pt", map_location=torch.device(self.device)).mean(dim=1)
                 if(pair_idx):
-                    emb = torch.load(f"{self.emb_dir}/{pair}.pt")
-                    batch_dict["embeddings"] = torch.cat((batch_dict["embeddings"], emb))
+                    batch_dict["embeddings"] = torch.cat((batch_dict["embeddings"], emb), dim=0)
                 else:
-                    batch_dict["embeddings"] = torch.load(f"{self.emb_dir}/{pair}.pt")
+                    batch_dict["embeddings"] = emb
             torch.save(batch_dict, batch_path)
             print(f'Saved: {batch_path} [Batch size: {len(batch["concat_id"])}]')
 

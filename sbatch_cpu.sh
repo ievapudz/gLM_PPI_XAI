@@ -13,7 +13,8 @@ cat << EOF | sbatch
 #SBATCH --nodes=1
 #SBATCH --output=logs/slurm/"$JOB_NAME".out
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --mem=64G
+#SBATCH --qos=1day
 
 # activate conda env
 export PATH=/scicore/home/schwede/pudziu0000/mambaforge/bin:$PATH

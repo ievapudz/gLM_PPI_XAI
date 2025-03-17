@@ -24,7 +24,7 @@ Sanity
 Sanity
 Sanity
                                                                             
-Saved: ./tests/outputs/_001/batches/train_batch_0.pt [Batch size: 2]
+Saved: ./tests/outputs/_001/mean_batches/train_batch_0.pt [Batch size: 2]
 
 Training
 Training
