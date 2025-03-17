@@ -3,8 +3,6 @@ from torch.utils.data import DataLoader, Dataset
 from Bio import SeqIO
 from data_process.Processor import Processor
 from pathlib import Path
-import os
-import torch
 
 class SequencePairDataset(Dataset):
     """
@@ -44,6 +42,7 @@ class SequencePairDataset(Dataset):
         row = self.data.iloc[idx].to_dict()
         pair_id, seq, len1, len2 = self.processor.process_pair(
             [row['protein1'], row['protein2']], self.fasta_dict, aa_only=True)
+        # TODO: may be unnecessary - could be removed in that case
         row['concat_id'] = pair_id
         row['sequence'] = seq
         row['length1'] = len1+1
@@ -64,8 +63,6 @@ class SequencePairDataModule(LightningDataModule):
         positive_only: bool = False,
         num_workers: int = 1,
         num_samples: int = None,
-        emb_dir: str = None,
-        batch_dir: str = None
     ):
         super().__init__()
         self.fasta_file = Path(fasta_file)
@@ -77,8 +74,6 @@ class SequencePairDataModule(LightningDataModule):
         self.positive_only = positive_only
         self.num_workers = num_workers
         self.num_samples = num_samples
-        self.emb_dir = emb_dir
-        self.batch_dir = batch_dir
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
@@ -100,61 +95,32 @@ class SequencePairDataModule(LightningDataModule):
                 self.num_samples,
             )
 
-    def exists_batch(self, stage_prefix):
-        if(not os.path.exists(self.batch_dir)): return False
-        return any(f.startswith(stage_prefix) for f in os.listdir(self.batch_dir))
-
-    def save_batch_files(self, loader, stage="train"):
-        os.makedirs(self.batch_dir, exist_ok=True)
-
-        for batch_idx, batch in enumerate(loader):
-            batch_emb = {}
-            batch_path = os.path.join(self.batch_dir, f"{stage}_batch_{batch_idx}.pt")
-            batch["emb_dir"] = batch_path
-            for pair in batch["concat_id"]:
-                emb = torch.load(f"{self.emb_dir}/{pair}.pt")
-                batch_emb[pair] = emb
-            torch.save(batch_emb, batch_path)
-            print(f'Saved: {batch_path} [Batch size: {len(batch["concat_id"])}]')
-
     def train_dataloader(self):
-        loader = DataLoader(
+        return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
         )
-        if(not self.exists_batch(stage_prefix="train")):
-            self.save_batch_files(loader, stage="train")
-
-        loaded_batch_emb = torch.load(f"{self.batch_dir}/train_batch_0.pt")
-        print(loaded_batch_emb)
-        return loader 
     
     def val_dataloader(self):
-        loader = DataLoader(
+        return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
         )
-        if(not self.exists_batch(stage_prefix="validate")):
-            self.save_batch_files(loader, stage="validate")
-        return loader 
 
     def test_dataloader(self):
-        loader = DataLoader(
+        return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
         )
-        if(not self.exists_batch(stage_prefix="test")):
-            self.save_batch_files(loader, stage="test")
-        return loader
 
     def predict_dataloader(self):
         return DataLoader(

@@ -3,20 +3,19 @@ model:
     class_path: gLM.models.gLM2
     init_args:
         model: 
-            class_path: gLM.models.PooledEmbeddings
+            class_path: gLM.models.MutationEntropyMatrix
             init_args:
-                emb_path: ./data/simple/per_res_emb/
+                fast: true
+                matrix_path: ./outputs/entropy_matrices/
 data:
     class_path: gLM.dataloader.SequencePairDataModule
     init_args:
-        fasta_file: ./data/simple/sequences.fasta
-        data_folder: ./data/simple/
+        fasta_file: ./data/Bernett2022/human_swissprot_oneliner.fasta
+        data_folder: ./data/Bernett2022/
         batch_size: 4096
         positive_only: false
-        num_workers: 8
+        num_workers: 0
         num_samples: null
-        emb_dir: ./data/simple/per_res_emb/
-        batch_dir: ./data/simple/per_res_emb/batches/
 optimizer:
     class_path: torch.optim.Adam
     init_args:
@@ -31,7 +30,7 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'simple_mean_pooled'
+            name: 'Bernett2022_1k_entropy'
             log_model: false
             prefix: ''
     enable_checkpointing: true
@@ -57,17 +56,15 @@ trainer:
             - calibration_curves
             - classification_report
             - mcc
-            - roc_auc
-            - pr_auc
+            - roc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/simple/checkpoints/optimized/
+            dirpath: logs/checkpoints/optimized/
             filename: model-{epoch}
             monitor: val/loss
             mode: min
             save_last: true
             save_top_k: 1
-
 
 
 
