@@ -26,12 +26,6 @@ ssh [username]@transfer12.scicore.unibas.ch
 git clone https://huggingface.co/tattabio/gLM2_650M
 ```
 
-## Access the MLFlow board (deprecated?)
-
-```
-mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host localhost --port 8080
-```
-
 ## Running of the predictions
 
 Example for the entropy predictions:
@@ -68,7 +62,54 @@ For the complexes:
 srun --mem-per-cpu=8GB --cpus-per-task=1 --reservation=schwede python3 scoring/compute_entropy.py -i data/Bernett2022/false_positive_sample.lst -c
 ```
 
-## Notes
+## Collecting a bacterial PINDER subset
 
-1. For PyTorch-Lightning to accept MLflow logger, we need to override the setup method of SaveConfigCallback class as given [here](https://github.com/Lightning-AI/pytorch-lightning/discussions/14047).
+Retrieving UniProt IDs:
+
+```
+srun cat ~/projects/gLM/data/PINDER/filenames_[split]_5_1024_400.txt | \
+    awk -F'[_-]' '{print $4, $9}' | \
+    awk '{if($1 == $2) print $1; else print $1"\n"$2}' \
+    > ~/projects/gLM/data/PINDER/uniprotids_[split]_5_1024_400.txt 
+```
+
+Retrieving the subset of UniProt IDs that come from bacterial organisms.
+Run on transfer node:
+
+```
+./data_process/uniprot_api_taxonomy_filter.sh \
+    data/PINDER/uniprotids_train_5_1024_400.txt \
+    data/PINDER/uniprotids_train_5_1024_400_bacterial.txt
+
+./data_process/uniprot_api_taxonomy_filter.sh \
+    data/PINDER/uniprotids_val_5_1024_400.txt \
+    data/PINDER/uniprotids_val_5_1024_400_bacterial.txt
+
+./data_process/uniprot_api_taxonomy_filter.sh \
+    data/PINDER/uniprotids_test_5_1024_400.txt \
+    data/PINDER/uniprotids_test_5_1024_400_bacterial.txt
+```
+
+Retrieving the subset of filenames that have only bacterial systems:
+
+```
+srun ./data_process/both_bacterial_marker.sh \
+    data/PINDER/filenames_train_5_1024_400.txt \
+    data/PINDER/uniprotids_train_5_1024_400_bacterial.txt | \
+    tr ',' ' ' | awk '{if($2 == 1) print $1}' \
+    > data/PINDER/filenames_train_5_1024_400_bacterial.txt 
+
+srun ./data_process/both_bacterial_marker.sh \
+    data/PINDER/filenames_val_5_1024_400.txt \
+    data/PINDER/uniprotids_val_5_1024_400_bacterial.txt | \
+    tr ',' ' ' | awk '{if($2 == 1) print $1}' \
+    > data/PINDER/filenames_val_5_1024_400_bacterial.txt 
+
+srun ./data_process/both_bacterial_marker.sh \
+    data/PINDER/filenames_test_5_1024_400.txt \
+    data/PINDER/uniprotids_test_5_1024_400_bacterial.txt | \
+    tr ',' ' ' | awk '{if($2 == 1) print $1}' \
+    > data/PINDER/filenames_test_5_1024_400_bacterial.txt 
+```
+
 
