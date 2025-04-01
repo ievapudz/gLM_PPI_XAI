@@ -99,8 +99,8 @@ class OutputLoggingCallback(Callback):
         # Create a table with protein IDs, true labels, and predicted labels
         protein_ids = pl_module.step_outputs[split]['concat_id']
         true_labels = pl_module.step_outputs[split]['label']
-        predicted_labels = pl_module.step_outputs[split]['predicted_label'].squeeze().numpy()
-        predictions = pl_module.step_outputs[split]['predictions'].squeeze().numpy()
+        predicted_labels = np.atleast_1d(pl_module.step_outputs[split]['predicted_label'].squeeze().numpy())
+        predictions = np.atleast_1d(pl_module.step_outputs[split]['predictions'].squeeze().numpy())
 
         table_data = []
         for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):

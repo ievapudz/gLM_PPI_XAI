@@ -6,15 +6,16 @@ model:
             class_path: gLM.models.CategoricalJacobian
             init_args:
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/
+                matrix_path: ./outputs/categorical_jacobians/Euclidean/
+                distance: "Euclidean"
 data:
-    class_path: gLM.dataloader.SequencePairDataModule
+    class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
         fasta_file: ./data/ModAC/sequences.fasta
         data_folder: ./data/ModAC/
         batch_size: 4096
         positive_only: false
-        num_workers: 0
+        num_workers: 4
         num_samples: null
 optimizer:
     class_path: torch.optim.Adam
@@ -32,7 +33,7 @@ trainer:
             project: gLM_PPI_XAI
             name: 'ModAC'
             log_model: false
-            prefix: ''
+            prefix: 'Euclidean-fastCJ'
     enable_checkpointing: true
     callbacks:
       - class_path: gLM.callbacks.SetupWandB 
@@ -45,24 +46,24 @@ trainer:
           - 'Negative'
           - 'Positive'
           y_pred_key: predictions
-          y_true_key: label
+          y_pred_lab_key: predicted_label
+          y_true_lab_key: label
           make_one_hot: true
-          invert_probabilities: true
+          invert_probabilities: false
           make_correct_dim: true
           metrics_to_plot:
             - confusion_matrix
-            - pr
-            - pr_curve
-            - roc
-            - roc_curve
             - class_proportions
             - calibration_curves
             - classification_report
+            - mcc
+            - roc_auc
+            - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/checkpoints/optimized/
+            dirpath: logs/ModAC/checkpoints/optimized/
             filename: model-{epoch}
-            monitor: val/loss
+            monitor: validate/loss
             mode: min
             save_last: true
             save_top_k: 1

@@ -16,7 +16,7 @@ import os
 TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
-    def __init__(self, fast: bool, matrix_path: str):
+    def __init__(self, fast: bool, matrix_path: str, distance: str):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
@@ -35,6 +35,8 @@ class CategoricalJacobian(nn.Module):
 
         for param in self.model.parameters():
             param.requires_grad = False
+
+        self.distance = distance if(distance) else "Euclidean"
 
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
@@ -93,64 +95,6 @@ class CategoricalJacobian(nn.Module):
 
         return contacts
     
-    def get_cosine_categorical_jacobian(self, sequence: str, length1: int):
-        all_tokens = self.nuc_tokens + self.aa_tokens
-        num_tokens = len(all_tokens)
-
-        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
-        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
-        seqlen = input_ids.shape[0]
-        
-        # [seqlen, 1].
-        is_nuc_pos = torch.isin(input_ids, torch.tensor(self.nuc_tokens)).view(-1, 1)
-        # [1, num_tokens].
-        is_nuc_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.nuc_tokens)).view(1, -1)
-        # [seqlen, 1].
-        is_aa_pos = torch.isin(input_ids, torch.tensor(self.aa_tokens)).view(-1, 1)
-        # [1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.aa_tokens)).view(1, -1)
-
-        input_ids = input_ids.unsqueeze(0).to(self.device)
-
-        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
-            f = lambda x: self.model(x)[0][..., all_tokens].cpu().float()
-
-            x = torch.clone(input_ids).to(self.device)
-            ln = x.shape[1]
-
-            fx = f(x)[0]
-            if self.fast:
-                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
-            else:
-                fx_h = torch.zeros((ln, num_tokens, ln, num_tokens), dtype=torch.float32)
-                x = torch.tile(x, [num_tokens, 1])
-
-            for n in range(ln): # for each position
-                x_h = torch.clone(x)
-                if self.fast:
-                    x_h[:, n] = self.MASK_TOKEN_ID
-                else:
-                    x_h[:, n] = torch.tensor(all_tokens)
-                fx_h[n] = f(x_h)
-
-            # Zero out other modality
-            valid_nuc = is_nuc_pos & is_nuc_token
-            valid_aa = is_aa_pos & is_aa_token
-
-            fx_h = torch.where(valid_nuc | valid_aa, fx_h, 0.0)
-            fx = torch.where(valid_nuc | valid_aa, fx, 0.0)
-
-            fx_h = torch.squeeze(fx_h)
-            fx = torch.unsqueeze(fx, dim=0)
-
-            cos = torch.nn.CosineSimilarity(dim=2)
-            jac = cos(fx_h, fx)
-            jac = torch.ones_like(jac) - jac
-            
-            #contact = self.jac_to_contact(jac.numpy(), length1)
-
-        return jac, jac, tokens
-
     def get_categorical_jacobian(self, sequence: str, length1: int):
         all_tokens = self.nuc_tokens + self.aa_tokens
         num_tokens = len(all_tokens)
@@ -190,12 +134,29 @@ class CategoricalJacobian(nn.Module):
                     x_h[:, n] = torch.tensor(all_tokens)
                 fx_h[n] = f(x_h)
 
-            jac = fx_h-fx
             valid_nuc = is_nuc_pos & is_nuc_token
             valid_aa = is_aa_pos & is_aa_token
-            # Zero out other modality
-            jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
-            contact = self.jac_to_contact(jac.numpy(), length1)
+
+            if(self.distance == "cosine"):
+                fx_h_post = torch.where(valid_nuc | valid_aa, fx_h, 0.0)
+                fx_post = torch.where(valid_nuc | valid_aa, fx, 0.0)
+                cos = torch.nn.CosineSimilarity(dim=2)
+                jac = (torch.clamp(cos(fx_h_post[:, 4], fx_post[:, 4]), -1.0, 1.0)+1)/2
+                jac = torch.ones_like(jac) - jac
+
+                # Symmetrisation
+                contact = (jac+jac.T)/2
+                contact = contact.numpy()
+
+                # Removal of diagonal values
+                np.fill_diagonal(contact, 0)
+
+            elif(self.distance == "Euclidean"):
+                jac = fx_h-fx
+                # Zero out other modality
+                jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
+                contact = self.jac_to_contact(jac.numpy(), length1)
+
         return jac, contact, tokens 
     
     def contact_to_dataframe(self, con):
@@ -215,21 +176,21 @@ class CategoricalJacobian(nn.Module):
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
 
-    def outlier_count(self, upper_right_quadrant, mode="IQR", n=3, denominator=1e-8):
+    def outlier_count(self, array, upper_right_quadrant, mode="IQR", n=3, denominator=1e-8):
         if mode == "IQR":
-            Q1 = np.percentile(upper_right_quadrant, 25)
-            Q3 = np.percentile(upper_right_quadrant, 75)
+            Q1 = np.percentile(array, 25)
+            Q3 = np.percentile(array, 75)
             IQR = Q3-Q1
             threshold = Q3+1.5*IQR
 
         elif mode == "mean_stddev":
-            m = np.mean(upper_right_quadrant)
-            s = np.std(upper_right_quadrant)
+            m = np.mean(array)
+            s = np.std(array)
             threshold = m+n*s
 
         elif mode == "ratio":
             threshold = 0.7
-            upper_right_quadrant /= denominator
+            array /= denominator
 
         count_above_threshold = np.sum(upper_right_quadrant > threshold)
 
@@ -237,15 +198,20 @@ class CategoricalJacobian(nn.Module):
     
     def detect_ppi(self, array, len1, padding=0.1):
         # Calculate the number of residues to ignore
-        ignore_len1 = int(len1*padding)
-        ignore_len2 = int((array.shape[0]-len1)*padding)
+
+        if(padding < 1):
+            ignore_len1 = int(len1*padding)
+            ignore_len2 = int((array.shape[0]-len1)*padding)
+        else:
+            ignore_len1 = padding
+            ignore_len2 = padding
 
         # Detecting the PPI signal in upper right quadrant of matrix
         upper_right_quadrant = array[ignore_len1:len1-ignore_len1, len1+ignore_len2:-ignore_len2]
         quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(upper_right_quadrant, mode="mean_stddev", n=3)/quadrant_size
+        ppi = self.outlier_count(array, upper_right_quadrant, mode="mean_stddev", n=3)/quadrant_size
 
         # Just a placeholder for the counting stage
         ppi_lab = 1 if(ppi) else 0
@@ -271,18 +237,12 @@ class CategoricalJacobian(nn.Module):
 
         return array_2d
 
-    def forward(self, x):
+    def forward(self, x, x_idx, stage):
         sigmoid_v = np.vectorize(self.sigmoid)
         ppi_preds = []
         ppi_labs = []
 
         for i, s in enumerate(x['sequence']):
-            # TODO: has to be debugged properly - so that the number of true
-            #       labels would correspond to the number of done predictions
-            #if(len(x['sequence'][i]) > 1000):
-            #    print(x['concat_id'][i])
-            #    continue
-
             if(self.is_computed(x['concat_id'][i])):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
@@ -306,8 +266,8 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            array_2d = self.apply_z_scores(array_2d, x['length1'][i])
-            array_2d = self.apply_patching(array_2d, x['length1'][i])
+            #array_2d = self.apply_z_scores(array_2d)
+            #array_2d = self.apply_patching(array_2d, x['length1'][i])
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
@@ -727,8 +687,10 @@ class PooledEmbeddings(nn.Module):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.l = torch.nn.Sequential(
+            torch.nn.LayerNorm(self.emb_dim),
             torch.nn.Linear(self.emb_dim, 640),
             torch.nn.ReLU(),
+            torch.nn.Dropout(0.2),
             torch.nn.Linear(640, 1),
             torch.nn.Sigmoid()
         ) 
@@ -749,8 +711,8 @@ class PooledEmbeddings(nn.Module):
         return embeddings
 
     def compute_loss(self, batch):
-        loss = torch.nn.functional.binary_cross_entropy(
-            batch['predictions'].detach().cpu().squeeze().float(), 
+        loss = torch.nn.BCELoss()(
+            batch['predictions'].detach().cpu().squeeze().float(),
             batch['label'].detach().cpu().float()
         )
         return {'loss': loss}
@@ -770,6 +732,13 @@ class gLM2(LightningModule):
         for key, value in losses.items():
             self.log(f'{split}/{key}', value)
         return losses['loss']
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=10, verbose=True
+        )
+        return {"optimizer": optimizer, "scheduler": scheduler, "monitor": "validate/loss"}
 
     def training_step(self, batch, batch_idx):
         self.step(batch, batch_idx, 'train')
