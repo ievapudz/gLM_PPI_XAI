@@ -12,28 +12,23 @@ from scipy.ndimage import gaussian_filter1d
 from torch.distributions import Categorical
 import scipy.ndimage as ndimage
 import os
+from gLM.LMs import gLM2 as BioLM_gLM2
+from gLM.LMs import ESM2
 
 TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
-    def __init__(self, fast: bool, matrix_path: str, distance: str):
+    def __init__(self, model_path: str, fast: bool, matrix_path: str, distance: str):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
 
-        self.nuc_tokens = tuple(range(29, 33)) # 4 nucleotides a,t,c,g
-        self.aa_tokens = tuple(range(4, 24)) # 20 amino acids
+        if("gLM2" in model_path):
+            self.LM = BioLM_gLM2(model_path)
+        elif("esm2" in model_path):
+            self.LM = ESM2(model_path)
 
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-        # TODO: consider setting it in a customizable way
-        model_path = "./gLM2_650M"
-        self.model = AutoModelForMaskedLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-
-        self.MASK_TOKEN_ID = self.tokenizer.mask_token_id
-
-        for param in self.model.parameters():
+        for param in self.LM.model.parameters():
             param.requires_grad = False
 
         self.distance = distance if(distance) else "Euclidean"
@@ -41,32 +36,67 @@ class CategoricalJacobian(nn.Module):
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
-        self.too_long = []
-
-    def conditioned_APC(self, s, len1):
-        new_s = np.zeros(np.shape(s))
-
-        for i in range(len(s)):
-            for j in range(len(s)):
-                if i < len1 and j < len1:
-                    # Case when both residues belong to the first protein
-                    expected = np.sum(s[i, :len1]) * np.sum(s[:len1, j]) / np.sum(s[:len1, :len1])
-                    new_s[i, j] = s[i, j] - expected
-                elif i >= len1 and j >= len1:
-                    # Case when both residues belong to the second protein
-                    expected = np.sum(s[i, len1:]) * np.sum(s[len1:, j]) / np.sum(s[len1:, len1:])
-                    new_s[i, j] = s[i, j] - expected
+    def get_logits(self, input_ids):
+        input_ids = input_ids.unsqueeze(0).to(self.LM.device)
+        with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
+            f = lambda x: self.LM.model(x)[0][..., self.LM.tokens["all"]].cpu().float()
+        
+            x = torch.clone(input_ids).to(self.LM.device)
+            ln = x.shape[1]
+            
+            fx = f(x)[0]
+            if self.fast:
+                fx_h = torch.zeros(
+                    (ln, 1 , ln, self.LM.num_tokens), 
+                    dtype=torch.float32
+                )
+            else:
+                fx_h = torch.zeros(
+                    (ln, self.LM.num_tokens, ln, self.LM.num_tokens),
+                    dtype=torch.float32
+                )
+                x = torch.tile(x, [self.LM.num_tokens, 1])
+                
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if self.fast:
+                    x_h[:, n] = self.LM.mask_token_id
                 else:
-                    # Case when residues come from different proteins (ensure symmetry)
-                    E_ij = np.sum(s[i, len1:]) * np.sum(s[:len1, j]) / np.sum(s[len1:, :len1])
-                    E_ji = np.sum(s[j, len1:]) * np.sum(s[:len1, i]) / np.sum(s[len1:, :len1])
-                    expected = (E_ij + E_ji) / 2  # Symmetric correction
-                    new_s[i, j] = new_s[j, i] = s[i, j] - expected
+                    x_h[:, n] = torch.tensor(self.tokens["all"])
+                fx_h[n] = f(x_h)
 
-        return new_s
+        return fx_h, fx   
+ 
+    def cosine_dissimilarity(self, fx_h, fx):
+        # Vectorised cosine dissimilarity computation for fast version of CJ computations
+        cos = torch.nn.CosineSimilarity(dim=2)
+        # NOTE: 4 is the index of the first aa token in gLM2 and ESM2
+        #       It might be important to consider for other pLMs.
+        jac = (torch.clamp(cos(fx_h[:, 4], fx[:, 4]), -1.0, 1.0)+1)/2
+        jac = torch.ones_like(jac) - jac
+        return jac
 
-    def jac_to_contact(self, jac, length1, symm=True, center=True, diag="remove", apc=True):
-        X = jac.copy()
+    def get_cosine_contacts(self, fx_h, fx, masks):
+        fx_h_masked = self.LM.apply_masks(fx_h, masks)
+        fx_masked = self.LM.apply_masks(fx, masks)
+
+        jac = self.cosine_dissimilarity(fx_h_masked, fx_masked)
+
+        # Symmetrisation
+        contacts = (jac+jac.T)/2
+        
+        contacts = contacts.numpy()
+        
+        # Removal of diagonal values
+        np.fill_diagonal(contacts, 0)
+        
+        return contacts
+
+    def get_euclidean_contacts(self, fx_h, fx, masks, symm=True, center=True, diag="remove", apc=True):
+        jac = fx_h - fx
+        jac = self.LM.apply_masks(jac, masks)
+
+        X = jac.numpy().copy()
         Lx, Ax, Ly, Ay = X.shape
 
         if center:
@@ -94,71 +124,18 @@ class CategoricalJacobian(nn.Module):
             np.fill_diagonal(contacts,0)
 
         return contacts
-    
-    def get_categorical_jacobian(self, sequence: str, length1: int):
-        all_tokens = self.nuc_tokens + self.aa_tokens
-        num_tokens = len(all_tokens)
 
-        input_ids = torch.tensor(self.tokenizer.encode(sequence), dtype=torch.int)
-        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
-        seqlen = input_ids.shape[0]
-        # [seqlen, 1, seqlen, 1].
-        is_nuc_pos = torch.isin(input_ids, torch.tensor(self.nuc_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_nuc_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.nuc_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
-        # [seqlen, 1, seqlen, 1].
-        is_aa_pos = torch.isin(input_ids, torch.tensor(self.aa_tokens)).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(all_tokens), torch.tensor(self.aa_tokens)).view(1, -1, 1, 1).repeat(1, 1, 1, num_tokens)
+    def get_contacts(self, sequence: str, length1: int):
+        input_ids, tokens, seqlen = self.LM.get_tokenized(sequence)
+        masks = self.LM.get_masks(input_ids, seqlen)
+        fx_h, fx = self.get_logits(input_ids)
+        if(self.distance == "Euclidean"):
+            contacts = self.get_euclidean_contacts(fx_h, fx, masks)
+        elif(self.distance == "cosine"):
+            contacts = self.get_cosine_contacts(fx_h, fx, masks)
 
-        input_ids = input_ids.unsqueeze(0).to(self.device)
+        return contacts 
 
-        with torch.no_grad(), torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu', enabled=True):
-            f = lambda x: self.model(x)[0][..., all_tokens].cpu().float()
-
-            x = torch.clone(input_ids).to(self.device)
-            ln = x.shape[1]
-
-            fx = f(x)[0]
-            if self.fast:
-                fx_h = torch.zeros((ln, 1, ln, num_tokens), dtype=torch.float32)
-            else:
-                fx_h = torch.zeros((ln,num_tokens,ln,num_tokens),dtype=torch.float32)
-                x = torch.tile(x,[num_tokens,1])
-
-            for n in range(ln): # for each position
-                x_h = torch.clone(x)
-                if self.fast:
-                    x_h[:, n] = self.MASK_TOKEN_ID
-                else:
-                    x_h[:, n] = torch.tensor(all_tokens)
-                fx_h[n] = f(x_h)
-
-            valid_nuc = is_nuc_pos & is_nuc_token
-            valid_aa = is_aa_pos & is_aa_token
-
-            if(self.distance == "cosine"):
-                fx_h_post = torch.where(valid_nuc | valid_aa, fx_h, 0.0)
-                fx_post = torch.where(valid_nuc | valid_aa, fx, 0.0)
-                cos = torch.nn.CosineSimilarity(dim=2)
-                jac = (torch.clamp(cos(fx_h_post[:, 4], fx_post[:, 4]), -1.0, 1.0)+1)/2
-                jac = torch.ones_like(jac) - jac
-
-                # Symmetrisation
-                contact = (jac+jac.T)/2
-                contact = contact.numpy()
-
-                # Removal of diagonal values
-                np.fill_diagonal(contact, 0)
-
-            elif(self.distance == "Euclidean"):
-                jac = fx_h-fx
-                # Zero out other modality
-                jac = torch.where(valid_nuc | valid_aa, jac, 0.0)
-                contact = self.jac_to_contact(jac.numpy(), length1)
-
-        return jac, contact, tokens 
-    
     def contact_to_dataframe(self, con):
         sequence_length = con.shape[0]
         idx = [str(i) for i in np.arange(1, sequence_length+1)]
@@ -167,11 +144,7 @@ class CategoricalJacobian(nn.Module):
         df.columns = ['i', 'j', 'value']
         return df
     
-    def sigmoid(self, x):
-        return 1/(1+math.exp(-x))
-    
     def is_computed(self, id):
-        # TODO: adjust the naming of the output files after debugging
         cj_path = pathlib.Path(f"{self.matrix_path}/{id}_{self.cj_type}CJ.npy")
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
@@ -229,16 +202,7 @@ class CategoricalJacobian(nn.Module):
 
         return array_2d
 
-    def apply_patching(self, array_2d, len1):
-        quadrant = array_2d[:len1, len1:]
-        gaussian_filtered = ndimage.gaussian_filter(quadrant, sigma=1)
-        mean_filtered = ndimage.uniform_filter(gaussian_filtered, size=5)
-        array_2d[:len1, len1:] = mean_filtered
-
-        return array_2d
-
     def forward(self, x, x_idx, stage):
-        sigmoid_v = np.vectorize(self.sigmoid)
         ppi_preds = []
         ppi_labs = []
 
@@ -247,8 +211,8 @@ class CategoricalJacobian(nn.Module):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
             else:
-                J, contact, tokens = self.get_categorical_jacobian(s, x['length1'][i])
-                df = self.contact_to_dataframe(contact)
+                contacts = self.get_contacts(s, x['length1'][i])
+                df = self.contact_to_dataframe(contacts)
 
                 # TODO: perhaps this chunk of code could be optimized?
                 pivot_df = df.pivot(index='i', columns='j', values='value')
@@ -266,8 +230,6 @@ class CategoricalJacobian(nn.Module):
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
-            #array_2d = self.apply_z_scores(array_2d)
-            #array_2d = self.apply_patching(array_2d, x['length1'][i])
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
