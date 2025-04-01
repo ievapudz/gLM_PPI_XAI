@@ -17,8 +17,9 @@ class SequencePairDataset(Dataset):
         fasta_file,
         data_file,
         num_samples: int = None,
+        concat_type: str = "gLM2"
     ):
-        self.processor = Processor(fasta_file, data_file)
+        self.processor = Processor(fasta_file, data_file, concat_type)
         self.data = self.processor.load_pair_list()
 
         if num_samples is not None:
@@ -64,7 +65,8 @@ class SequencePairDataModule(LightningDataModule):
         num_workers: int = 1,
         num_samples: int = None,
         emb_dir: str = None,
-        batch_dir: str = None
+        batch_dir: str = None,
+        concat_type: str = "gLM2"
     ):
         super().__init__()
         self.fasta_file = Path(fasta_file)
@@ -78,6 +80,7 @@ class SequencePairDataModule(LightningDataModule):
         self.num_samples = num_samples
         self.emb_dir = emb_dir
         self.batch_dir = batch_dir
+        self.concat_type = concat_type
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -87,11 +90,13 @@ class SequencePairDataModule(LightningDataModule):
                 self.fasta_file,
                 self.train_file,
                 self.num_samples,
+                self.concat_type
             )
             self.val_dataset = SequencePairDataset(
                 self.fasta_file,
                 self.val_file,
                 self.num_samples,
+                self.concat_type
             )
 
         if stage == "test":
@@ -99,6 +104,7 @@ class SequencePairDataModule(LightningDataModule):
                 self.fasta_file,
                 self.test_file,
                 self.num_samples,
+                self.concat_type
             )
 
     def exists_batch(self, stage_prefix):
@@ -193,6 +199,7 @@ class SequencePairCJDataModule(LightningDataModule):
         positive_only: bool = False,
         num_workers: int = 1,
         num_samples: int = None,
+        concat_type: str = "gLM2"
     ):
         super().__init__()
         self.fasta_file = Path(fasta_file)
@@ -204,6 +211,7 @@ class SequencePairCJDataModule(LightningDataModule):
         self.positive_only = positive_only
         self.num_workers = num_workers
         self.num_samples = num_samples
+        self.concat_type = concat_type
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -213,11 +221,13 @@ class SequencePairCJDataModule(LightningDataModule):
                 self.fasta_file,
                 self.train_file,
                 self.num_samples,
+                self.concat_type
             )
             self.val_dataset = SequencePairDataset(
                 self.fasta_file,
                 self.val_file,
                 self.num_samples,
+                self.concat_type
             )
 
         if stage == "test":
@@ -225,6 +235,7 @@ class SequencePairCJDataModule(LightningDataModule):
                 self.fasta_file,
                 self.test_file,
                 self.num_samples,
+                self.concat_type
             )
 
     def train_dataloader(self):
