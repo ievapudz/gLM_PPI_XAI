@@ -25,7 +25,38 @@ class BioLM(nn.Module):
         tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
         seqlen = input_ids.shape[0]
         
-        return input_ids, tokens, seqlen
+        return input_ids, tokens, seqlen, None
+
+    def get_logits(self, input_ids, chain_mask=None, fast=True):
+        input_ids = input_ids.unsqueeze(0).to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
+            f = lambda x: self.model(x)[0][..., self.tokens["all"]].cpu().float()
+            x = torch.clone(input_ids).to(self.device)
+            ln = x.shape[1]
+
+            fx = f(x)[0]
+            if fast:
+                fx_h = torch.zeros(
+                    (ln, 1 , ln, self.num_tokens),
+                    dtype=torch.float32
+                )
+            else:
+                fx_h = torch.zeros(
+                    (ln, self.num_tokens, ln, self.num_tokens),
+                    dtype=torch.float32
+                )
+                x = torch.tile(x, [self.num_tokens, 1])
+
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if fast:
+                    x_h[:, n] = self.mask_token_id
+                else:
+                    x_h[:, n] = torch.tensor(self.tokens["all"])
+                fx_h[n] = f(x_h)
+
+        return fx_h, fx
 
 class gLM2(BioLM):
     def __init__(self, model_path: str):
@@ -118,14 +149,13 @@ class MINT(nn.Module):
         self.num_tokens = len(self.tokens["all"])
         self.mask_token_id = self.tokenizer.alphabet.mask_idx
 
-    def get_tokenized(self, sequences):
-        input_ids, chain_ids = self.tokenizer([sequences])
-        tokens = []
-        for j in range(len(input_ids)):
-            tokens.append([self.tokenizer.alphabet.get_tok(i) for i in input_ids[j]])
+    def get_tokenized(self, sequence):
+        sequence = sequence.split("<eos>")
+        input_ids, chain_masks = self.tokenizer([sequence])
+        tokens = [self.tokenizer.alphabet.get_tok(i) for i in input_ids[0]]
         seqlen = input_ids.shape[1]
 
-        return input_ids, tokens, seqlen
+        return input_ids, tokens, seqlen, chain_masks
 
     def get_masks(self, input_ids, seqlen):
         # [seqlen, 1, seqlen, 1].
@@ -148,3 +178,35 @@ class MINT(nn.Module):
         matrix_masked = torch.where(valid_aa, matrix, 0.0)
 
         return matrix_masked
+
+    def get_logits(self, input_ids, chain_mask=None, fast=True):
+        input_ids = input_ids.to(self.device)
+        chain_mask = chain_mask.to(self.device)
+
+        with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
+            f = lambda x, y: self.model(x, y)["logits"][..., self.tokens["all"]].cpu().float()
+            x = torch.clone(input_ids).to(self.device)
+            ln = x.shape[1]
+
+            fx = f(x, chain_mask)[0]
+            if fast:
+                fx_h = torch.zeros(
+                    (ln, 1 , ln, self.num_tokens),
+                    dtype=torch.float32
+                )
+            else:
+                fx_h = torch.zeros(
+                    (ln, self.num_tokens, ln, self.num_tokens),
+                    dtype=torch.float32
+                )
+                x = torch.tile(x, [self.num_tokens, 1])
+
+            for n in range(ln): # for each position
+                x_h = torch.clone(x)
+                if fast:
+                    x_h[:, n] = self.mask_token_id
+                else:
+                    x_h[:, n] = torch.tensor(self.tokens["all"])
+                fx_h[n] = f(x_h, chain_mask)
+
+        return fx_h, fx

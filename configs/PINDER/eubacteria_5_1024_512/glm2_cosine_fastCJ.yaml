@@ -6,6 +6,7 @@ model:
             class_path: gLM.models.CategoricalJacobian
             init_args:
                 model_path: "./gLM2_650M/"
+                config_path: ""
                 fast: true
                 matrix_path: ./outputs/categorical_jacobians/cosine/
                 distance: "cosine"

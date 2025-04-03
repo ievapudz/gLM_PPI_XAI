@@ -39,41 +39,7 @@ class CategoricalJacobian(nn.Module):
 
         self.matrix_path = matrix_path
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
-
-    def get_logits(self, input_ids):
-        if(isinstance(self.LM, MINT)):
-            input_ids = input_ids.to(self.LM.device)
-        else:
-            input_ids = input_ids.unsqueeze(0).to(self.LM.device)
-
-        with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
-            f = lambda x: self.LM.model(x)[self.LM.logits_key][..., self.LM.tokens["all"]].cpu().float()        
-            x = torch.clone(input_ids).to(self.LM.device)
-            ln = x.shape[1]
-
-            fx = f(x)[0]
-            if self.fast:
-                fx_h = torch.zeros(
-                    (ln, 1 , ln, self.LM.num_tokens), 
-                    dtype=torch.float32
-                )
-            else:
-                fx_h = torch.zeros(
-                    (ln, self.LM.num_tokens, ln, self.LM.num_tokens),
-                    dtype=torch.float32
-                )
-                x = torch.tile(x, [self.LM.num_tokens, 1])
-                
-            for n in range(ln): # for each position
-                x_h = torch.clone(x)
-                if self.fast:
-                    x_h[:, n] = self.LM.mask_token_id
-                else:
-                    x_h[:, n] = torch.tensor(self.tokens["all"])
-                fx_h[n] = f(x_h)
-
-        return fx_h, fx   
- 
+    
     def cosine_dissimilarity(self, fx_h, fx):
         # Vectorised cosine dissimilarity computation for fast version of CJ computations
         cos = torch.nn.CosineSimilarity(dim=2)
@@ -133,9 +99,9 @@ class CategoricalJacobian(nn.Module):
         return contacts
 
     def get_contacts(self, sequence: str, length1: int):
-        input_ids, tokens, seqlen = self.LM.get_tokenized(sequence)
+        input_ids, tokens, seqlen, chain_mask = self.LM.get_tokenized(sequence)
         masks = self.LM.get_masks(input_ids, seqlen)
-        fx_h, fx = self.get_logits(input_ids)
+        fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.cj_type)
         if(self.distance == "Euclidean"):
             contacts = self.get_euclidean_contacts(fx_h, fx, masks)
         elif(self.distance == "cosine"):
