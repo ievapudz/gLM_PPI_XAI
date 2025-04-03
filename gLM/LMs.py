@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
+from mint.helpers.extract import MINTWrapper, load_config, CollateFn
 
 class BioLM(nn.Module):
     def __init__(self, model_path: str):
@@ -11,6 +12,7 @@ class BioLM(nn.Module):
         self.mask_token_id = self.tokenizer.mask_token_id
         # Tokens will be initialised in the inheriting classes
         self.tokens = {}
+        self.logits_key = 0
 
     def get_masks(self):
         pass
@@ -85,6 +87,56 @@ class ESM2(BioLM):
             torch.tensor(self.tokens["aa"])
         ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
         
+        return is_aa_pos, is_aa_token
+
+    def apply_masks(self, matrix, masks):
+        is_aa_pos, is_aa_token = masks
+
+        valid_aa = is_aa_pos & is_aa_token
+
+        # The logits' shape is just expanded
+        matrix_masked = torch.where(valid_aa, matrix, 0.0)
+
+        return matrix_masked
+
+class MINT(nn.Module):
+    def __init__(self, model_path: str, config_path: str):
+        super().__init__()
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        
+        config = load_config(config_path)
+        wrapper = MINTWrapper(config, model_path, sep_chains=True, device=self.device)
+        self.tokenizer = CollateFn(1024)
+
+        self.model = wrapper.model
+        self.logits_key = "logits"
+
+        self.tokens = {
+            "aa": tuple(range(4, 29))
+        }
+        self.tokens["all"] = self.tokens["aa"]
+        self.num_tokens = len(self.tokens["all"])
+        self.mask_token_id = self.tokenizer.alphabet.mask_idx
+
+    def get_tokenized(self, sequences):
+        input_ids, chain_ids = self.tokenizer([sequences])
+        tokens = []
+        for j in range(len(input_ids)):
+            tokens.append([self.tokenizer.alphabet.get_tok(i) for i in input_ids[j]])
+        seqlen = input_ids.shape[1]
+
+        return input_ids, tokens, seqlen
+
+    def get_masks(self, input_ids, seqlen):
+        # [seqlen, 1, seqlen, 1].
+        is_aa_pos = torch.isin(input_ids,
+            torch.tensor(self.tokens["aa"])
+        ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+        # [1, num_tokens, 1, num_tokens].
+        is_aa_token = torch.isin(torch.tensor(self.tokens["aa"]),
+            torch.tensor(self.tokens["aa"])
+        ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
+
         return is_aa_pos, is_aa_token
 
     def apply_masks(self, matrix, masks):

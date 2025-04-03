@@ -14,19 +14,23 @@ import scipy.ndimage as ndimage
 import os
 from gLM.LMs import gLM2 as BioLM_gLM2
 from gLM.LMs import ESM2
+from gLM.LMs import MINT
 
 TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
-    def __init__(self, model_path: str, fast: bool, matrix_path: str, distance: str):
+    def __init__(self, model_path: str, config_path: str, fast: bool, matrix_path: str, distance: str):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
 
+        # TODO: improve this determination
         if("gLM2" in model_path):
             self.LM = BioLM_gLM2(model_path)
         elif("esm2" in model_path):
             self.LM = ESM2(model_path)
+        elif("mint" in model_path):
+            self.LM = MINT(model_path, config_path)
 
         for param in self.LM.model.parameters():
             param.requires_grad = False
@@ -37,13 +41,16 @@ class CategoricalJacobian(nn.Module):
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
 
     def get_logits(self, input_ids):
-        input_ids = input_ids.unsqueeze(0).to(self.LM.device)
+        if(isinstance(self.LM, MINT)):
+            input_ids = input_ids.to(self.LM.device)
+        else:
+            input_ids = input_ids.unsqueeze(0).to(self.LM.device)
+
         with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
-            f = lambda x: self.LM.model(x)[0][..., self.LM.tokens["all"]].cpu().float()
-        
+            f = lambda x: self.LM.model(x)[self.LM.logits_key][..., self.LM.tokens["all"]].cpu().float()        
             x = torch.clone(input_ids).to(self.LM.device)
             ln = x.shape[1]
-            
+
             fx = f(x)[0]
             if self.fast:
                 fx_h = torch.zeros(
