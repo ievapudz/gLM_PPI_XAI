@@ -99,8 +99,8 @@ class OutputLoggingCallback(Callback):
         # Create a table with protein IDs, true labels, and predicted labels
         protein_ids = pl_module.step_outputs[split]['concat_id']
         true_labels = pl_module.step_outputs[split]['label']
-        predicted_labels = np.atleast_1d(pl_module.step_outputs[split]['predicted_label'].squeeze().numpy())
-        predictions = np.atleast_1d(pl_module.step_outputs[split]['predictions'].squeeze().numpy())
+        predicted_labels = np.atleast_1d(pl_module.step_outputs[split]['predicted_label'].squeeze().to("cpu").numpy())
+        predictions = np.atleast_1d(pl_module.step_outputs[split]['predictions'].squeeze().to("cpu").numpy())
 
         table_data = []
         for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
@@ -169,6 +169,9 @@ class LogClassificationMetrics(Callback):
     def log_metrics(self, trainer, pl_module, split):
         y_pred = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
         y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_lab_key]], dim=0)
+        if(len(y_pred.shape) == 3 and (y_pred.shape[1] == 1 and y_pred.shape[2] == 1)):
+            y_pred = torch.squeeze(y_pred, dim=[1, 2])
+            y_pred_lab = torch.squeeze(y_pred_lab, dim=[1, 2])
         y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_lab_key]], dim=0)
 
         log_dict = log_classification_metrics(

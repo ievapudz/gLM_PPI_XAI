@@ -611,46 +611,34 @@ class EmbeddingsMatrix(nn.Module):
         pred_labels = x['predicted_label']
         return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
 
-class PooledEmbeddings(nn.Module):
-    def __init__(self, emb_path: str):
+class PredictorPPI(nn.Module):
+    def __init__(self, emb_dim: int, hid_size: int):
         super().__init__()
-        self.emb_dim = 1280
-        self.pool = "mean"
-        self.emb_path = emb_path
-        pathlib.Path(self.emb_path).mkdir(parents=True, exist_ok=True)
+        self.emb_dim = emb_dim
+        self.hid_size = hid_size
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.l = torch.nn.Sequential(
-            torch.nn.LayerNorm(self.emb_dim),
-            torch.nn.Linear(self.emb_dim, 640),
+            torch.nn.Linear(2*self.emb_dim, self.hid_size),
             torch.nn.ReLU(),
             torch.nn.Dropout(0.2),
-            torch.nn.Linear(640, 1),
+            torch.nn.Linear(hid_size, 1),
             torch.nn.Sigmoid()
         ) 
 
-    def forward(self, batch, batch_idx, stage):
-        emb = self.get_batch_embeddings(batch, batch_idx, stage)
-        
-        ppi_preds = self.l(emb).to("cpu")
+    def forward(self, x, x_idx, stage):
+        ppi_preds = self.l(x['embeddings'])
         ppi_labs = torch.round(ppi_preds).int()
 
-        return torch.FloatTensor(ppi_preds), ppi_labs
+        return ppi_preds, ppi_labs
     
-    def get_batch_embeddings(self, batch, batch_idx, stage):
-        embeddings = torch.load(
-            f"{self.emb_path}/{self.pool}_batches/{stage}_batch_{batch_idx}.pt")["embeddings"].to(
-            self.device)
-
-        return embeddings
-
     def compute_loss(self, batch):
         loss = torch.nn.BCELoss()(
-            batch['predictions'].detach().cpu().squeeze().float(),
-            batch['label'].detach().cpu().float()
+            batch['predictions'].to(self.device).squeeze().float(),
+            batch['label'].to(self.device).float()
         )
-        return {'loss': loss}
+        return loss
 
 class gLM2(LightningModule):
     def __init__(self, model: nn.Module):
@@ -663,10 +651,9 @@ class gLM2(LightningModule):
     
         self.step_outputs[split] = batch
 
-        losses = self.model.compute_loss(batch)
-        for key, value in losses.items():
-            self.log(f'{split}/{key}', value)
-        return losses['loss']
+        loss = self.model.compute_loss(batch)
+        self.log(f'{split}/loss', loss)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
@@ -676,7 +663,8 @@ class gLM2(LightningModule):
         return {"optimizer": optimizer, "scheduler": scheduler, "monitor": "validate/loss"}
 
     def training_step(self, batch, batch_idx):
-        self.step(batch, batch_idx, 'train')
+        loss = self.step(batch, batch_idx, 'train')
+        return loss
 
     def validation_step(self, batch, batch_idx):
         self.step(batch, batch_idx, 'validate')

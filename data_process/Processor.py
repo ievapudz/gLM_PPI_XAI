@@ -17,8 +17,8 @@ class Processor:
         fasta = dict(zip(headers, seqs))
         return fasta
     
-    def load_pair_list(self,):
-        pairs = pd.read_csv(self.pair_list_path, sep="\t")
+    def load_pair_list(self, sep="\t"):
+        pairs = pd.read_csv(self.pair_list_path, sep=sep)
         return pairs
     
     def process_pair(self, pair, fasta_dict, aa_only=True, ready_pair_ids=False):
