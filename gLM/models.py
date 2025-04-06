@@ -613,7 +613,7 @@ class EmbeddingsMatrix(nn.Module):
 
 class PredictorPPI(nn.Module):
     def __init__(self, emb_dim: int, hid_size: int):
-        super().__init__()
+        super(PredictorPPI, self).__init__()
         self.emb_dim = emb_dim
         self.hid_size = hid_size
 
@@ -634,7 +634,7 @@ class PredictorPPI(nn.Module):
         return ppi_preds, ppi_labs
     
     def compute_loss(self, batch):
-        loss = torch.nn.BCELoss()(
+        loss = torch.nn.functional.binary_cross_entropy(
             batch['predictions'].to(self.device).squeeze().float(),
             batch['label'].to(self.device).float()
         )
@@ -645,30 +645,40 @@ class gLM2(LightningModule):
         super().__init__()
         self.model = model
         self.save_hyperparameters()
-        
+        self.loss_accum = 0
+        self.num_steps = 0
+        self.configure_optimizers(self.model.parameters())
+     
     def step(self, batch, batch_idx, split):
         batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
-    
+   
         self.step_outputs[split] = batch
-
         loss = self.model.compute_loss(batch)
         self.log(f'{split}/loss', loss)
         return loss
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=10, verbose=True
+    def configure_optimizers(self, params):
+        self.optimizer = torch.optim.AdamW(params, lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode="min", factor=0.5, patience=3, verbose=True
         )
-        return {"optimizer": optimizer, "scheduler": scheduler, "monitor": "validate/loss"}
+        return {"optimizer": self.optimizer, "scheduler": self.scheduler, "monitor": "validate/loss"}
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'train')
+        self.loss_accum += loss.detach().cpu().item()
+        self.num_steps += 1
         return loss
 
+    def on_train_epoch_end(self):
+        self.scheduler.step(self.loss_accum / self.num_steps + 1)
+        self.loss_accum = 0
+        self.num_steps = 0
+
     def validation_step(self, batch, batch_idx):
-        self.step(batch, batch_idx, 'validate')
+        loss = self.step(batch, batch_idx, 'validate')
+        return loss
 
     def test_step(self, batch, batch_idx):
-        self.step(batch, batch_idx, 'test')
-
+        loss = self.step(batch, batch_idx, 'test')
+        return loss
