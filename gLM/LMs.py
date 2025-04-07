@@ -1,7 +1,7 @@
 from torch import nn
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
-from mint.helpers.extract import MINTWrapper, load_config, CollateFn
+from mint.mint.helpers.extract import MINTWrapper, load_config, CollateFn
 
 class BioLM(nn.Module):
     def __init__(self, model_path: str):
