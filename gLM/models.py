@@ -654,7 +654,7 @@ class gLM2(LightningModule):
    
         self.step_outputs[split] = batch
         loss = self.model.compute_loss(batch)
-        self.log(f'{split}/loss', loss)
+        self.log(f'{split}/loss', loss.detach().cpu().item(), on_step=True, on_epoch=True)
         return loss
 
     def configure_optimizers(self, params):
@@ -674,6 +674,8 @@ class gLM2(LightningModule):
         self.scheduler.step(self.loss_accum / self.num_steps + 1)
         self.loss_accum = 0
         self.num_steps = 0
+        self.step_outputs["train"].clear()
+        self.step_outputs["validate"].clear()
 
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'validate')
