@@ -2,7 +2,8 @@
 
 # Retrieve command name from the command line
 JOB_NAME=$1
-MODEL=$2
+TASK_NAME=$2
+MODEL=$3
 
 mkdir -p logs/slurm
 

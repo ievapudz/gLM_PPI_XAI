@@ -19,7 +19,8 @@ from gLM.LMs import MINT
 TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
-    def __init__(self, model_path: str, config_path: str, fast: bool, matrix_path: str, distance: str):
+    def __init__(self, model_path: str, config_path: str, fast: bool, 
+        matrix_path: str, distance: str, sep_chains=False):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
@@ -30,7 +31,7 @@ class CategoricalJacobian(nn.Module):
         elif("esm2" in model_path):
             self.LM = ESM2(model_path)
         elif("mint" in model_path):
-            self.LM = MINT(model_path, config_path)
+            self.LM = MINT(model_path, config_path, sep_chains)
 
         for param in self.LM.model.parameters():
             param.requires_grad = False
@@ -620,7 +621,7 @@ class PredictorPPI(nn.Module):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.l = torch.nn.Sequential(
-            torch.nn.Linear(2*self.emb_dim, self.hid_size),
+            torch.nn.Linear(self.emb_dim, self.hid_size),
             torch.nn.ReLU(),
             torch.nn.Dropout(0.2),
             torch.nn.Linear(hid_size, 1),

@@ -5,7 +5,7 @@ model:
         model: 
             class_path: gLM.models.PredictorPPI
             init_args:
-                emb_dim: 1280
+                emb_dim: 2560
                 hid_size: 640
 data:
     class_path: gLM.dataloader.EmbeddingsDataModule

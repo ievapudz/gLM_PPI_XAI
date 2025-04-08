@@ -131,7 +131,7 @@ class ESM2(BioLM):
         return matrix_masked
 
 class MINT(nn.Module):
-    def __init__(self, model_path: str, config_path: str):
+    def __init__(self, model_path: str, config_path: str, sep_chains: bool):
         super().__init__()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         
@@ -148,6 +148,8 @@ class MINT(nn.Module):
         self.tokens["all"] = self.tokens["aa"]
         self.num_tokens = len(self.tokens["all"])
         self.mask_token_id = self.tokenizer.alphabet.mask_idx
+
+        self.sep_chains = sep_chains
 
     def get_tokenized(self, sequence):
         sequence = sequence.split("<eos>")
@@ -181,7 +183,10 @@ class MINT(nn.Module):
 
     def get_logits(self, input_ids, chain_mask=None, fast=True):
         input_ids = input_ids.to(self.device)
-        chain_mask = chain_mask.to(self.device)
+        if(self.sep_chains):
+            chain_mask = chain_mask.to(self.device)
+        else:
+            chain_mask = None
 
         with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
             f = lambda x, y: self.model(x, y)["logits"][..., self.tokens["all"]].cpu().float()
