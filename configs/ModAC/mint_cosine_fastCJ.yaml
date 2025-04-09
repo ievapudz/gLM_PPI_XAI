@@ -5,18 +5,22 @@ model:
         model: 
             class_path: gLM.models.CategoricalJacobian
             init_args:
+                model_path: "./mint/mint/model/mint.ckpt"
+                config_path: "./mint/mint/model/esm2_t33_650M_UR50D.json"
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/Euclidean/
-                distance: "Euclidean"
+                matrix_path: ./outputs/categorical_jacobians/mint_cosine/
+                distance: "cosine"
+                sep_chains: true
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
         fasta_file: ./data/ModAC/sequences.fasta
-        data_folder: ./data/ModAC/
+        data_folder: ./data/ModAC
         batch_size: 4096
         positive_only: false
         num_workers: 4
         num_samples: null
+        concat_type: "mint"
 optimizer:
     class_path: torch.optim.Adam
     init_args:
@@ -31,9 +35,9 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'ModAC'
+            name: 'ModAC-MINT'
             log_model: false
-            prefix: 'Euclidean-fastCJ'
+            prefix: 'sep-cosine-fastCJ'
     enable_checkpointing: true
     callbacks:
       - class_path: gLM.callbacks.SetupWandB 

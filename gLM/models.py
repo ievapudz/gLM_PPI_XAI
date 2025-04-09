@@ -24,6 +24,7 @@ class CategoricalJacobian(nn.Module):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         # TODO: improve this determination
         if("gLM2" in model_path):
@@ -108,7 +109,7 @@ class CategoricalJacobian(nn.Module):
         elif(self.distance == "cosine"):
             contacts = self.get_cosine_contacts(fx_h, fx, masks)
 
-        return contacts 
+        return contacts, tokens
 
     def contact_to_dataframe(self, con):
         sequence_length = con.shape[0]
@@ -123,21 +124,10 @@ class CategoricalJacobian(nn.Module):
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
 
-    def outlier_count(self, array, upper_right_quadrant, mode="IQR", n=3, denominator=1e-8):
-        if mode == "IQR":
-            Q1 = np.percentile(array, 25)
-            Q3 = np.percentile(array, 75)
-            IQR = Q3-Q1
-            threshold = Q3+1.5*IQR
-
-        elif mode == "mean_stddev":
-            m = np.mean(array)
-            s = np.std(array)
-            threshold = m+n*s
-
-        elif mode == "ratio":
-            threshold = 0.7
-            array /= denominator
+    def outlier_count(self, array, upper_right_quadrant, n=3):
+        m = np.mean(array)
+        s = np.std(array)
+        threshold = m+n*s
 
         count_above_threshold = np.sum(upper_right_quadrant > threshold)
 
@@ -158,7 +148,7 @@ class CategoricalJacobian(nn.Module):
         quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(array, upper_right_quadrant, mode="mean_stddev", n=3)/quadrant_size
+        ppi = self.outlier_count(array, upper_right_quadrant, n=3)/quadrant_size
 
         # Just a placeholder for the counting stage
         ppi_lab = 1 if(ppi) else 0
@@ -185,7 +175,7 @@ class CategoricalJacobian(nn.Module):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
             else:
-                contacts = self.get_contacts(s, x['length1'][i])
+                contacts, tokens = self.get_contacts(s, x['length1'][i])
                 df = self.contact_to_dataframe(contacts)
 
                 # TODO: perhaps this chunk of code could be optimized?
@@ -208,12 +198,14 @@ class CategoricalJacobian(nn.Module):
             ppi_preds.append(ppi_pred) 
             ppi_labs.append(ppi_lab) 
 
-        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)
-    
-    def compute_loss(self, x):
-        predictions = x['predictions']
-        pred_labels = x['predicted_label']
-        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+        return torch.FloatTensor(ppi_preds), torch.IntTensor(ppi_labs)    
+
+    def compute_loss(self, batch):
+        loss = torch.nn.functional.binary_cross_entropy(
+            batch['predictions'].to(self.device).float(),
+            batch['label'].to(self.device).float()
+        )
+        return loss
 
 class MutationEntropyMatrix(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
@@ -348,7 +340,7 @@ class MutationEntropyMatrix(nn.Module):
     def compute_loss(self, x):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
-        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+        return zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())
 
 
 class EntropyFactors(nn.Module):
@@ -432,7 +424,7 @@ class EntropyFactors(nn.Module):
     def compute_loss(self, x):
         predictions = x['predictions']
         pred_labels = x['predicted_label']
-        return {'loss': zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())}
+        return zero_one_loss(x['label'].detach().cpu(), pred_labels.detach().cpu())
 
 class EmbeddingsMatrix(nn.Module):
     def __init__(self, fast: bool, matrix_path: str):
