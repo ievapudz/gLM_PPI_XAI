@@ -6,7 +6,7 @@ model:
             class_path: gLM.models.CategoricalJacobian
             init_args:
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/Euclidean/
+                matrix_path: ./outputs/categorical_jacobians/glm2_Euclidean/
                 distance: "Euclidean"
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule

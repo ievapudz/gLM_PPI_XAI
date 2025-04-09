@@ -6,8 +6,10 @@ model:
             class_path: gLM.models.CategoricalJacobian
             init_args:
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/cosine/
+                matrix_path: ./outputs/categorical_jacobians/glm2_cosine/
                 distance: "cosine"
+                model_path: "./gLM2_650M/"
+                config_path: ""
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
@@ -17,6 +19,7 @@ data:
         positive_only: false
         num_workers: 4
         num_samples: null
+        concat_type: "gLM2"
 optimizer:
     class_path: torch.optim.Adam
     init_args:
@@ -33,7 +36,7 @@ trainer:
             project: gLM_PPI_XAI
             name: 'Bernett2022_1k'
             log_model: false
-            prefix: 'Euclidean-fastCJ'
+            prefix: 'cosine-fastCJ'
     enable_checkpointing: true
     callbacks:
       - class_path: gLM.callbacks.SetupWandB 
@@ -61,7 +64,7 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/Bernett2022_1k/checkpoints/optimized/
+            dirpath: logs/Bernett2022_1k/gLM2/CJ/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
