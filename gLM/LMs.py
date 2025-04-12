@@ -137,7 +137,7 @@ class MINT(nn.Module):
         
         config = load_config(config_path)
         wrapper = MINTWrapper(config, model_path, sep_chains=True, device=self.device)
-        self.tokenizer = CollateFn(1280)
+        self.tokenizer = CollateFn(2560)
 
         self.model = wrapper.model
         self.logits_key = "logits"

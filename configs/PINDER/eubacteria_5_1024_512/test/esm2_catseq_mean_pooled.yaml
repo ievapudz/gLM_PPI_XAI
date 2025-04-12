@@ -12,7 +12,7 @@ data:
     init_args:
         data_folder: /scicore/home/schwede/pudziu0000/projects/gLM/data/PINDER/eubacteria_5_1024_512/
         pt_folder: /scicore/home/schwede/pudziu0000/projects/gLM/embeddings/PINDER-eubacteria/esm2_t33_650M_UR50D/
-        batch_size: 1024
+        batch_size: 2048
         positive_only: false
         num_workers: 4
         num_samples: null

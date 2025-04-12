@@ -5,14 +5,14 @@ model:
         model: 
             class_path: gLM.models.PredictorPPI
             init_args:
-                emb_dim: 2560
+                emb_dim: 1280
                 hid_size: 640
 data:
     class_path: gLM.dataloader.EmbeddingsDataModule
     init_args:
-        data_folder: /scicore/home/schwede/pudziu0000/projects/gLM/data/PINDER/eubacteria_5_1024_512/
-        pt_folder: /scicore/home/schwede/pudziu0000/projects/gLM/embeddings/PINDER-eubacteria/gLM2_650M_sep/
-        batch_size: 2048
+        data_folder: /scicore/home/schwede/pudziu0000/projects/gLM/data/Bernett2022_1k/
+        pt_folder: /scicore/home/schwede/pudziu0000/projects/gLM/embeddings/Bernett2022_1k/gLM2_650M/
+        batch_size: 1024
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -33,7 +33,7 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'PINDER-eubacteria-gLM2'
+            name: 'Bernett2022-gLM2-1280emb'
             log_model: false
             prefix: 'pooled-emb'
     enable_checkpointing: true
@@ -68,10 +68,9 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/PINDER-eubacteria/gLM2_sep/checkpoints/optimized/
+            dirpath: logs/Bernett2022_1k/gLM2/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
             save_last: true
             save_top_k: 1
-ckpt_path: logs/PINDER-eubacteria/gLM2_sep/checkpoints/optimized/model-epoch=22.ckpt

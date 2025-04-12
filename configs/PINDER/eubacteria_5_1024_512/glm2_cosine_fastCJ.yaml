@@ -8,7 +8,7 @@ model:
                 model_path: "./gLM2_650M/"
                 config_path: ""
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/cosine/
+                matrix_path: ./outputs/categorical_jacobians/glm2_cosine/
                 distance: "cosine"
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
