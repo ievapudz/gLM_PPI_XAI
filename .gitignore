@@ -2,6 +2,10 @@ gLM2_650M/
 data/
 logs/
 outputs/
+embeddings/
+baseline_models/
+esm2_t33_650M_UR50D/
 
 **/*.out
 **/__pycache__
+**/.ipynb_checkpoints/
