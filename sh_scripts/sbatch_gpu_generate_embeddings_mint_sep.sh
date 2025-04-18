@@ -26,7 +26,7 @@ source activate mint
 
 srun python3 ./mint/embeddings_mint.py --task "${TASK}" --model_name "mint" \
     --devices "0" --sep_chains \
-    --checkpoint_path $HOME/projects/mint/mint/model/mint.ckpt
+    --checkpoint_path $HOME/projects/gLM/mint/mint/model/mint.ckpt  
 
 EOF
 

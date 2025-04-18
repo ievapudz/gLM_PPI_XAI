@@ -5,6 +5,7 @@ outputs/
 embeddings/
 baseline_models/
 esm2_t33_650M_UR50D/
+mint/mint/model/mint.ckpt
 
 **/*.out
 **/__pycache__
