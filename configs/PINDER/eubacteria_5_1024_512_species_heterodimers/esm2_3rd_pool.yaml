@@ -12,7 +12,7 @@ data:
     init_args:
         data_folder: /scicore/home/schwede/pudziu0000/projects/gLM/data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         pt_folder: /scicore/home/schwede/pudziu0000/projects/gLM/embeddings/PINDER-eubacteria-species-heterodimers/esm2_t33_650M_UR50D_3rd/
-        batch_size: 128
+        batch_size: 256
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -33,9 +33,9 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'PINDER-eubacteria-sp-hetero-ESM2'
+            name: 'PINDER-bact-sp-hetero-ESM2-3rd-mean'
             log_model: false
-            prefix: '3rd-pooled-emb'
+            prefix: 'ESM2'
     enable_checkpointing: true
     callbacks:
       - class_path: gLM.callbacks.SetupWandB

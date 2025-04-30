@@ -33,9 +33,9 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'PINDER-eubacteria-sp-hetero-gLM2-mixed-test'
+            name: 'PINDER-bact-sp-hetero-gLM2-3rd-mean-mixed-test'
             log_model: false
-            prefix: '3rd-pooled-emb'
+            prefix: 'gLM2'
     enable_checkpointing: true
     callbacks:
       - class_path: gLM.callbacks.SetupWandB
