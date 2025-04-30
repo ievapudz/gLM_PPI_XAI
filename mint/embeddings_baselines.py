@@ -14,6 +14,9 @@ def main(args):
     if args.sep_embed:
         model_name_clean = model_name_clean + "_sep"
 
+    if not args.sep_embed and args.pool_type == "sep_mean":
+        model_name_clean = model_name_clean + "_3rd"
+
     save_dir = f"./embeddings/{args.task}/{model_name_clean}"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -53,6 +56,7 @@ def main(args):
             devices=devices,
             batch_size=args.bs,
             max_seq_length=args.max_seq_length,
+            pool_type=args.pool_type
         )
 
     elif "gLM2" in args.model_name:
@@ -64,6 +68,7 @@ def main(args):
             devices=devices,
             batch_size=args.bs,
             max_seq_length=args.max_seq_length,
+            pool_type=args.pool_type
         )
     else:
         print("No model found")
@@ -80,8 +85,8 @@ def main(args):
                     mut_inputs = model.encode_two(train_dataset.seqs3, train_dataset.seqs4, how="cat")
                     train_inputs = wt_inputs - mut_inputs
                 else:
-                    train_seqs1 = join_sequences(train_dataset.seqs1, train_dataset.seqs2)
-                    train_seqs2 = join_sequences(train_dataset.seqs3, train_dataset.seqs4)
+                    train_seqs1, _ = join_sequences(train_dataset.seqs1, train_dataset.seqs2)
+                    train_seqs2, _ = join_sequences(train_dataset.seqs3, train_dataset.seqs4)
                     train_inputs = model.encode_two(train_seqs1, train_seqs2)
             elif args.task == "Pdb-bind":
                 train_seqs = train_dataset.seqs
@@ -91,8 +96,11 @@ def main(args):
                     train_inputs = model.encode_two(
                         train_dataset.seqs1, train_dataset.seqs2, how="cat", is_gLM2=is_gLM2
                     )
+                elif not args.sep_embed and args.pool_type == "sep_mean":
+                    train_seqs, len_seq1 = join_sequences(train_dataset.seqs1, train_dataset.seqs2, is_gLM2)
+                    train_inputs = model.encode(train_seqs, len1=len_seq1)
                 else:
-                    train_seqs = join_sequences(train_dataset.seqs1, train_dataset.seqs2, is_gLM2)
+                    train_seqs, _ = join_sequences(train_dataset.seqs1, train_dataset.seqs2, is_gLM2)
                     train_inputs = model.encode(train_seqs)
             torch.save(train_inputs, train_emb_file_name)
 
@@ -101,8 +109,11 @@ def main(args):
         if not os.path.isfile(val_emb_file_name):
             if args.sep_embed:
                 val_inputs = model.encode_two(val_dataset.seqs1, val_dataset.seqs2, how="cat", is_gLM2=is_gLM2)
+            elif not args.sep_embed and args.pool_type == "sep_mean":
+                val_seqs, len_seq1 = join_sequences(val_dataset.seqs1, val_dataset.seqs2, is_gLM2)
+                val_inputs = model.encode(val_seqs, len1=len_seq1)
             else:
-                val_seqs = join_sequences(val_dataset.seqs1, val_dataset.seqs2, is_gLM2)
+                val_seqs, _ = join_sequences(val_dataset.seqs1, val_dataset.seqs2, is_gLM2)
                 val_inputs = model.encode(val_seqs)
             torch.save(val_inputs, val_emb_file_name)
 
@@ -111,8 +122,11 @@ def main(args):
         if not os.path.isfile(test_emb_file_name):
             if args.sep_embed:
                 test_inputs = model.encode_two(test_dataset.seqs1, test_dataset.seqs2, how="cat", is_gLM2=is_gLM2)
+            elif not args.sep_embed and args.pool_type == "sep_mean":
+                test_seqs, len_seq1 = join_sequences(test_dataset.seqs1, test_dataset.seqs2, is_gLM2)
+                test_inputs = model.encode(test_seqs, len1=len_seq1)
             else:
-                test_seqs = join_sequences(test_dataset.seqs1, test_dataset.seqs2, is_gLM2)
+                test_seqs, _ = join_sequences(test_dataset.seqs1, test_dataset.seqs2, is_gLM2)
                 test_inputs = model.encode(test_seqs)
             torch.save(test_inputs, test_emb_file_name)
 
@@ -128,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--devices", type=str, default="0")
     parser.add_argument("--test_run", action="store_true", default=False)
     parser.add_argument("--sep_embed", action="store_true", default=False)
+    parser.add_argument("--pool_type", type=str, default="mean")
 
     args = parser.parse_args()
     main(args)

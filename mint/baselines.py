@@ -24,7 +24,7 @@ from transformers.modeling_outputs import BaseModelOutput
 
 
 def pool(
-    last_hidden_states: torch.Tensor, attention_mask: torch.Tensor, pool_type: str
+    last_hidden_states: torch.Tensor, attention_mask: torch.Tensor, pool_type: str, len1=None
 ) -> torch.Tensor:
     """Pool embeddings across the sequence length dimension."""
     assert (
@@ -36,6 +36,14 @@ def pool(
     last_hidden = last_hidden_states.masked_fill(~attention_mask[..., None].bool(), 0.0)
     if pool_type == "mean":
         emb = last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
+    elif pool_type == "sep_mean":
+        last_hidden = last_hidden.squeeze()
+        attention_mask = attention_mask.squeeze() 
+        emb1 = last_hidden[:len1[-1]].sum(dim=0) / attention_mask[:len1[-1]].sum(dim=0)[..., None]
+        emb2 = last_hidden[len1[-1]:].sum(dim=0) / attention_mask[len1[-1]:].sum(dim=0)[..., None]
+        emb1 = emb1.unsqueeze(0)
+        emb2 = emb2.unsqueeze(0)
+        emb = torch.cat([emb1, emb2], -1)
     elif pool_type == "max":
         emb = last_hidden.max(dim=1)[0]
     elif pool_type == "cls":
@@ -108,12 +116,12 @@ class BioSeqTransformer(ABC):
             self.layers = layers
             self.layer_labels = [str(layer) for layer in layers]
 
-    def _encode_single_batch(self, batch_dict: Dict[str, Tensor]):
+    def _encode_single_batch(self, batch_dict: Dict[str, Tensor], len1: list):
         """Returns the output embedding for the given batch with shape [batch, num_layers, D]."""
         outputs = self.encoder(**batch_dict, output_hidden_states=True)
         embeds = [outputs.hidden_states[layer] for layer in self.layers]
         embeds = [
-            pool(layer_embeds, batch_dict["attention_mask"], self.pool_type)
+            pool(layer_embeds, batch_dict["attention_mask"], self.pool_type, len1)
             for layer_embeds in embeds
         ]
         # Stack with shape [B, num_layers, D].
@@ -162,7 +170,7 @@ class BioSeqTransformer(ABC):
         pass
 
     @torch.no_grad()
-    def encode(self, sequences, **kwargs):
+    def encode(self, sequences, len1=None, **kwargs):
         """Returns a list of embeddings for the given sequences.
         Args:
             sequences (`List[str]`): List of sequences to encode
@@ -189,15 +197,17 @@ class BioSeqTransformer(ABC):
             )
 
         encoded_embeds = []
-        for batch_dict in tqdm.tqdm(data_loader, desc="encoding", mininterval=10):
+        for i, batch_dict in enumerate(tqdm.tqdm(data_loader, desc="encoding", mininterval=10)):
             batch_dict = {k: v.to(self.device) for k, v in batch_dict.items()}
 
-            embeds = self._encode_single_batch(batch_dict)
-
+            if(len1):
+                embeds = self._encode_single_batch(batch_dict, [len1[i]])
+            else:
+                embeds = self._encode_single_batch(batch_dict, None)
             if self.l2_norm:
                 embeds = F.normalize(embeds, p=2, dim=-1)
             encoded_embeds.append(embeds.cpu())
-
+            
         return torch.cat(encoded_embeds, dim=0)
 
     @torch.no_grad()
@@ -213,7 +223,6 @@ class BioSeqTransformer(ABC):
             return encodings1 - encodings2
         else:
             return torch.cat([encodings1, encodings2], -1)
-
 
 class ESM(BioSeqTransformer):
     """ESM model from https://huggingface.co/docs/transformers/en/model_doc/esm"""
@@ -251,13 +260,13 @@ class gLM2(BioSeqTransformer):
     def embed_dim(self) -> int:
         return self.config.dim
 
-    def _encode_single_batch(self, batch_dict: Dict[str, Tensor]):
+    def _encode_single_batch(self, batch_dict: Dict[str, Tensor], len1: list):
         """Returns the output embedding for the given batch with shape [batch, num_layers, D]."""
 
         embeds = self.encoder(batch_dict['input_ids'], output_hidden_states=True).last_hidden_state
 
         embeds = [
-            pool(embeds, batch_dict["attention_mask"], self.pool_type)
+            pool(embeds, batch_dict["attention_mask"], self.pool_type, len1)
         ]
         # Stack with shape [B, num_layers, D].
         embeds = torch.stack(embeds, dim=1)
