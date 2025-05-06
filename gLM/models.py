@@ -149,6 +149,7 @@ class CategoricalJacobian(nn.Module):
 
         # Detect outliers
         ppi = self.outlier_count(array, upper_right_quadrant, n=3)/quadrant_size
+        if(quadrant_size == 0): ppi = 0
 
         # Just a placeholder for the counting stage
         ppi_lab = 1 if(ppi) else 0
