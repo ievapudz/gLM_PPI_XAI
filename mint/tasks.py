@@ -215,6 +215,18 @@ def get_task_datasets(task, test_run=False, return_metadata=False):
         method = "mlp"
         output_size = 1
         monitor_metric = "AUPRC"
+    elif task == "PINDER-eubacteria-species-harder-test":
+        train_fl = None 
+        val_fl = None
+        test_fl = "./data/PINDER/eubacteria_5_1024_512_species_harder_test/test.csv"
+        task_type = "bc"
+        col1 = "seq1"
+        col2 = "seq2"
+        target_col = "label"
+        num_epochs = 30
+        method = "mlp"
+        output_size = 1
+        monitor_metric = "AUPRC"
     elif task == "antibody-ranks":
         train_fl = None 
         val_fl = None 
