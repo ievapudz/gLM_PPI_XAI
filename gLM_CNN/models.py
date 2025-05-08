@@ -1,5 +1,6 @@
 from pytorch_lightning import LightningModule
 from torch import nn
+import torch.nn.functional as F
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModel
 import numpy as np
@@ -20,7 +21,7 @@ TOKENIZERS_PARALLELISM = True
 
 class LogitsTensorGenerator(nn.Module):
     def __init__(self, model_path: str, config_path: str, fast: bool, 
-        tensor_path: str, sep_chains=False):
+        tensor_path: str, sep_chains=False, max_L=1024):
         super().__init__()
         self.fast = fast
         self.logits_type = 'fast' if(self.fast) else 'full'
@@ -29,17 +30,31 @@ class LogitsTensorGenerator(nn.Module):
         # TODO: improve this determination
         if("gLM2" in model_path):
             self.LM = BioLM_gLM2(model_path)
+            self.max_L = max_L + 2
         elif("esm2" in model_path):
             self.LM = ESM2(model_path)
+            self.max_L = max_L + 3
         elif("mint" in model_path):
             self.LM = MINT(model_path, config_path, sep_chains)
-
+            self.max_L = max_L + 4
         for param in self.LM.model.parameters():
             param.requires_grad = False
 
         self.tensor_path = tensor_path
         pathlib.Path(self.tensor_path).mkdir(parents=True, exist_ok=True)
     
+    def pad(self, tensor):
+        L, _, _, TT = tensor.shape
+        pad_tot = self.max_L - L
+        if pad_tot < 0:
+            raise ValueError(f"L ({L}) is greater than L_max ({L_max})")
+        pad_left = pad_tot // 2
+        pad_right = pad_tot - pad_left        
+
+        tensor = tensor.permute(1, 3, 0, 2)
+
+        return F.pad(tensor, (pad_left, pad_right, pad_left, pad_right), mode='constant', value=0.0)
+
     def is_computed(self, id):
         tensor_path = pathlib.Path(f"{self.tensor_path}/{id}_{self.logits_type}Logits.pt")
         if(tensor_path.is_file() and tensor_path.stat().st_size != 0):
@@ -47,15 +62,22 @@ class LogitsTensorGenerator(nn.Module):
 
     def get_tensor(self, sequence: str, length1: int):
         input_ids, tokens, seqlen, chain_mask = self.LM.get_tokenized(sequence)
-        masks = self.LM.get_masks(input_ids, seqlen)
+        masks = self.LM.get_masks(input_ids, seqlen, fast=self.fast)
         fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.logits_type)
 
         L, T = fx.shape
         fx_expanded = fx.view(L, 1, 1, T).expand(L, 1, L, T)
 
+        fx_h = self.LM.apply_masks(fx_h, masks)
+        fx_expanded = self.LM.apply_masks(fx_expanded, masks)
+
         # Concatenating into shape: [L, 1, L, T+T]
         logits_tensor = torch.cat([fx_h, fx_expanded], dim=-1)
-
+        
+        # Padded: [1, T+T, max_L, max_L]
+        logits_tensor = self.pad(logits_tensor)
+        logits_tensor = logits_tensor.squeeze()
+        
         return logits_tensor
 
     def forward(self, x, x_idx, stage):
@@ -64,7 +86,6 @@ class LogitsTensorGenerator(nn.Module):
                 tensor = torch.load(f"{self.tensor_path}/{x['concat_id'][i]}_{self.logits_type}Logits.pt")
             else:
                 tensor = self.get_tensor(s, x['length1'][i])
-                print(tensor.shape)
                 torch.save(tensor, f"{self.tensor_path}/{x['concat_id'][i]}_{self.logits_type}Logits.pt")
 
         return tensor 
@@ -81,8 +102,7 @@ class PredictorPPI(LightningModule):
      
     def step(self, batch, batch_idx, split):
         batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
-        print(batch['logits_tensors'])
-        batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
+        #batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
    
         self.step_outputs[split] = batch
         loss = 0

@@ -11,8 +11,17 @@ class BioLM(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         self.mask_token_id = self.tokenizer.mask_token_id
         # Tokens will be initialised in the inheriting classes
-        self.tokens = {}
+        self.tokens = {"all": []}
+        self.num_tokens = 0
         self.logits_key = 0
+
+    def is_pos_token(self, input_ids, seqlen, token_type="aa"):
+        device = input_ids.device
+        is_pos = torch.isin(input_ids, torch.tensor(self.tokens[token_type]))
+        is_pos = is_pos.view(-1, 1, 1, 1).expand(seqlen, 1, seqlen, 1)
+        is_token = torch.ones(1, 1, 1, self.num_tokens, dtype=torch.bool, 
+            device=device)
+        return is_pos, is_token     
 
     def get_masks(self):
         pass
@@ -68,24 +77,42 @@ class gLM2(BioLM):
         self.tokens["all"] = self.tokens["aa"] + self.tokens["nuc"]
         self.num_tokens = len(self.tokens["all"])
 
-    def get_masks(self, input_ids, seqlen):
-        # [seqlen, 1, seqlen, 1].
-        is_nuc_pos = torch.isin(input_ids, 
-            torch.tensor(self.tokens["nuc"])
-        ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_nuc_token = torch.isin(torch.tensor(self.tokens["all"]), 
-            torch.tensor(self.tokens["nuc"])
-        ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["all"]))
-        # [seqlen, 1, seqlen, 1].
-        is_aa_pos = torch.isin(input_ids, 
-            torch.tensor(self.tokens["aa"])
-        ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(self.tokens["all"]), 
-            torch.tensor(self.tokens["aa"])
-        ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["all"]))
-        
+    def is_pos_token(self, input_ids, seqlen, token_type="aa"):
+        device = input_ids.device
+        is_pos = torch.isin(input_ids, torch.tensor(self.tokens[token_type]))
+        is_pos = is_pos.view(-1, 1, 1, 1).expand(seqlen, 1, seqlen, 1)
+        is_token = torch.isin(torch.tensor(self.tokens["all"]), torch.tensor(self.tokens[token_type], device=device))
+        is_token = is_token.view(1, 1, 1, self.num_tokens).expand(1, 1, seqlen, self.num_tokens)
+        return is_pos, is_token
+
+    def get_masks(self, input_ids, seqlen, fast=True):
+        if(fast):
+            is_aa_pos, is_aa_token = self.is_pos_token(
+                input_ids, seqlen, token_type="aa"
+            )
+            is_nuc_pos, is_nuc_token = self.is_pos_token(
+                input_ids, seqlen, token_type="nuc"
+            )
+        else:
+            device = input_ids.device
+            is_nuc_pos = torch.isin(input_ids, torch.tensor(self.tokens["nuc"]))
+            is_nuc_pos = is_nuc_pos.view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+            
+            is_nuc_token = torch.isin(torch.tensor(self.tokens["all"]), 
+                torch.tensor(self.tokens["nuc"])
+            )
+            is_nuc_token = is_nuc_token.view(1, -1, 1, 1)
+            is_nuc_token = is_nuc_token.repeat(1, 1, 1, len(self.tokens["all"]))
+            
+            is_aa_pos = torch.isin(input_ids, torch.tensor(self.tokens["aa"]))
+            is_aa_pos = is_aa_pos.view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+            
+            is_aa_token = torch.isin(torch.tensor(self.tokens["all"]), 
+                torch.tensor(self.tokens["aa"])
+            )
+            is_aa_token = is_aa_token.view(1, -1, 1, 1)
+            is_aa_token = is_aa_token.repeat(1, 1, 1, len(self.tokens["all"]))
+       
         return is_nuc_pos, is_nuc_token, is_aa_pos, is_aa_token
 
     def apply_masks(self, matrix, masks):
@@ -93,7 +120,7 @@ class gLM2(BioLM):
 
         valid_nuc = is_nuc_pos & is_nuc_token
         valid_aa = is_aa_pos & is_aa_token
-    
+   
         # The logits' shape is just expanded
         matrix_masked = torch.where(valid_nuc | valid_aa, matrix, 0.0)
 
@@ -108,15 +135,20 @@ class ESM2(BioLM):
         self.tokens["all"] = self.tokens["aa"]
         self.num_tokens = len(self.tokens["all"])
 
-    def get_masks(self, input_ids, seqlen):
-        # [seqlen, 1, seqlen, 1].
-        is_aa_pos = torch.isin(input_ids, 
-            torch.tensor(self.tokens["aa"])
-        ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(self.tokens["aa"]), 
-            torch.tensor(self.tokens["aa"])
-        ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
+    def get_masks(self, input_ids, seqlen, fast=True):
+        if(fast):
+            is_aa_pos, is_aa_token = self.is_pos_token(
+                input_ids, seqlen, token_type="aa"
+            )
+        else:
+            # [seqlen, 1, seqlen, 1].
+            is_aa_pos = torch.isin(input_ids, 
+                torch.tensor(self.tokens["aa"])
+            ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+            # [1, num_tokens, 1, num_tokens].
+            is_aa_token = torch.isin(torch.tensor(self.tokens["aa"]), 
+                torch.tensor(self.tokens["aa"])
+            ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
         
         return is_aa_pos, is_aa_token
 
@@ -159,15 +191,28 @@ class MINT(nn.Module):
 
         return input_ids, tokens, seqlen, chain_masks
 
-    def get_masks(self, input_ids, seqlen):
-        # [seqlen, 1, seqlen, 1].
-        is_aa_pos = torch.isin(input_ids,
-            torch.tensor(self.tokens["aa"])
-        ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
-        # [1, num_tokens, 1, num_tokens].
-        is_aa_token = torch.isin(torch.tensor(self.tokens["aa"]),
-            torch.tensor(self.tokens["aa"])
-        ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
+    def is_pos_token(self, input_ids, seqlen, token_type="aa"):
+        device = input_ids.device
+        is_pos = torch.isin(input_ids, torch.tensor(self.tokens[token_type]))
+        is_pos = is_pos.view(-1, 1, 1, 1).expand(seqlen, 1, seqlen, 1)
+        is_token = torch.ones(1, 1, 1, self.num_tokens, dtype=torch.bool,
+            device=device)
+        return is_pos, is_token
+
+    def get_masks(self, input_ids, seqlen, fast=True):
+        if(fast):
+            is_aa_pos, is_aa_token = self.is_pos_token(
+                input_ids, seqlen, token_type="aa"
+            )
+        else:
+            # [seqlen, 1, seqlen, 1].
+            is_aa_pos = torch.isin(input_ids,
+                torch.tensor(self.tokens["aa"])
+            ).view(-1, 1, 1, 1).repeat(1, 1, seqlen, 1)
+            # [1, num_tokens, 1, num_tokens].
+            is_aa_token = torch.isin(torch.tensor(self.tokens["aa"]),
+                torch.tensor(self.tokens["aa"])
+            ).view(1, -1, 1, 1).repeat(1, 1, 1, len(self.tokens["aa"]))
 
         return is_aa_pos, is_aa_token
 
