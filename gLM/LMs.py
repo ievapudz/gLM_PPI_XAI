@@ -196,7 +196,7 @@ class MINT(nn.Module):
             fx = f(x, chain_mask)[0]
             if fast:
                 fx_h = torch.zeros(
-                    (ln, 1 , ln, self.num_tokens),
+                    (ln, 1, ln, self.num_tokens),
                     dtype=torch.float32
                 )
             else:
