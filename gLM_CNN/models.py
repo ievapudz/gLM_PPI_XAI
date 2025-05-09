@@ -17,7 +17,7 @@ from gLM.LMs import gLM2 as BioLM_gLM2
 from gLM.LMs import ESM2
 from gLM.LMs import MINT
 
-TOKENIZERS_PARALLELISM = True
+TOKENIZERS_PARALLELISM = False
 
 class LogitsTensorGenerator(nn.Module):
     def __init__(self, model_path: str, config_path: str, fast: bool, 
@@ -76,36 +76,86 @@ class LogitsTensorGenerator(nn.Module):
         
         # Padded: [1, T+T, max_L, max_L]
         logits_tensor = self.pad(logits_tensor)
-        logits_tensor = logits_tensor.squeeze()
         
         return logits_tensor
 
     def forward(self, x, x_idx, stage):
+        tensors = None
         for i, s in enumerate(x['sequence']):
             if(self.is_computed(x['concat_id'][i])):
                 tensor = torch.load(f"{self.tensor_path}/{x['concat_id'][i]}_{self.logits_type}Logits.pt")
             else:
                 tensor = self.get_tensor(s, x['length1'][i])
                 torch.save(tensor, f"{self.tensor_path}/{x['concat_id'][i]}_{self.logits_type}Logits.pt")
+            tensors = torch.cat((tensors, tensor), dim=0) if(i) else tensor
 
-        return tensor 
+        return tensors 
+
+class LogitsTensorCNN(nn.Module):
+    def __init__(self, tensor_dim: int, num_in_channels: int):
+        super(LogitsTensorCNN, self).__init__()
+        self.tensor_dim = tensor_dim
+        self.num_in_channels = num_in_channels
+
+        self.max_tensor_dim = 1028
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        self.contact_l = torch.nn.Sequential(
+            torch.nn.Conv2d(self.num_in_channels, 1, kernel_size=5, stride=1, padding=0),
+            torch.nn.MaxPool2d(2, stride=2)
+        )
+        self.ppi_l = torch.nn.Sequential(
+            torch.nn.Linear(512*512, 1),
+            torch.nn.Sigmoid()
+        )
+
+    def get_input_pad(self, x):
+        in_pad = self.max_tensor_dim - self.tensor_dim
+        left_pad = in_pad // 2
+        right_pad = in_pad - left_pad
+        x = F.pad(x, pad=(left_pad, right_pad, left_pad, right_pad))
+        return x
+
+    def forward(self, x, x_idx, stage):
+        x['logits_tensors'] = self.get_input_pad(x['logits_tensors'])
+        x['logits_tensors'] = x['logits_tensors'].to(self.device)
+        contact_pred = self.contact_l(x['logits_tensors'])
+        ppi_pred = self.ppi_l(torch.flatten(contact_pred, start_dim=1))
+        labels = torch.round(ppi_pred).int()
+        return ppi_pred, labels        
+
+    def compute_loss(self, batch):
+        batch['predictions'] = batch['predictions'].squeeze()
+        loss = torch.nn.functional.binary_cross_entropy(
+            batch['predictions'].to(self.device).float(),
+            batch['label'].to(self.device).float()
+        )
+        return loss
 
 class PredictorPPI(LightningModule):
-    def __init__(self, logits_model: nn.Module):
+    def __init__(self, logits_model: nn.Module, model: nn.Module):
         super().__init__()
         self.logits_model = logits_model
-        #self.model = model
+        self.model = model
         self.save_hyperparameters()
         self.loss_accum = 0
         self.num_steps = 0
-        #self.configure_optimizers(self.model.parameters())
+        self.configure_optimizers(self.model.parameters())
+
+    def configure_optimizers(self, params):
+        self.optimizer = torch.optim.AdamW(params, lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode="min", factor=0.5, patience=3, verbose=True
+        )
+        return {"optimizer": self.optimizer, "scheduler": self.scheduler, "monitor": "validate/loss"}
      
     def step(self, batch, batch_idx, split):
         batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
-        #batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
+        batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
    
         self.step_outputs[split] = batch
-        loss = 0
+        loss = self.model.compute_loss(batch)
         self.log(f'{split}/loss', loss.detach().cpu().item(), on_step=True, on_epoch=True)
         return loss
 
