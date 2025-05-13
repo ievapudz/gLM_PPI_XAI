@@ -15,7 +15,7 @@ class UQRDataset(Dataset):
         self,
         data_file,
         fasta_file,
-        uqr_dir,
+        urq_dir,
         num_samples: int = None,
         concat_type = "gLM2"
     ):
@@ -35,22 +35,22 @@ class UQRDataset(Dataset):
         self.fasta_file = fasta_file
         self.fasta_dict = self.processor.load_fasta()
 
-        self.uqrs = self.load_contact_uqrs(uqr_dir)
+        self.urqs = self.load_contact_urqs(urq_dir)
 
-    def load_contact_uqrs(self, uqr_dir):
-        uqrs = {}
+    def load_contact_urqs(self, urq_dir):
+        urqs = {}
         
         for index, row in self.data.iterrows():
             concat_id = row['protein1'] + '-' + row['protein2']
             concat_id = concat_id.translate(str.maketrans({'_': '-', '-': '_'}))
 
             if(row['label']):
-                uqr_path = f"{uqr_dir}/{concat_id}.pt"
-                uqrs[concat_id] = torch.load(uqr_path) if(os.path.exists(uqr_path)) else torch.empty(512, 512).fill_(float('nan')) 
+                urq_path = f"{urq_dir}/{concat_id}.pt"
+                urqs[concat_id] = torch.load(urq_path) if(os.path.exists(urq_path)) else torch.empty(512, 512).fill_(float('nan')) 
             else:
-                uqrs[concat_id] = torch.zeros(512, 512)
+                urqs[concat_id] = torch.zeros(512, 512)
         
-        return uqrs
+        return urqs
 
     def __len__(self):
         return len(self.data)
@@ -66,7 +66,7 @@ class UQRDataset(Dataset):
         row['sequence'] = seq
         row['length1'] = len1+1
         row['length2'] = len2+1
-        row['uqr'] = self.uqrs[pair_id]
+        row['urq'] = self.urqs[pair_id]
         return row
 
 class UQRDataModule(LightningDataModule):
@@ -78,7 +78,7 @@ class UQRDataModule(LightningDataModule):
         self,
         fasta_file,
         data_folder,
-        uqr_folder,
+        urq_folder,
         batch_size: int,
         positive_only: bool = False,
         num_workers: int = 1,
@@ -88,7 +88,7 @@ class UQRDataModule(LightningDataModule):
         super().__init__()
         self.fasta_file = Path(fasta_file)
         self.data_folder = Path(data_folder)
-        self.uqr_folder = Path(uqr_folder)
+        self.urq_folder = Path(urq_folder)
         self.train_file = self.data_folder / "train.txt"
         self.val_file = self.data_folder / "validate.txt"
         self.test_file = self.data_folder / "test.txt"
@@ -105,14 +105,14 @@ class UQRDataModule(LightningDataModule):
             self.train_dataset = UQRDataset(
                 self.train_file,
                 self.fasta_file,
-                self.uqr_folder,
+                self.urq_folder,
                 self.num_samples,
                 self.concat_type
             )
             self.val_dataset = UQRDataset(
                 self.val_file,
                 self.fasta_file,
-                self.uqr_folder,
+                self.urq_folder,
                 self.num_samples,
                 self.concat_type
             )
@@ -121,7 +121,7 @@ class UQRDataModule(LightningDataModule):
             self.test_dataset = UQRDataset(
                 self.test_file,
                 self.fasta_file,
-                self.uqr_folder,
+                self.urq_folder,
                 self.num_samples,
                 self.concat_type
             )

@@ -19,7 +19,7 @@ data:
     init_args:
         fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
-        uqr_folder: ./outputs/logits_tensors/glm2/ 
+        urq_folder: ./outputs/urqs/contact_maps/
         batch_size: 32
         positive_only: false
         num_workers: 4
@@ -31,7 +31,7 @@ optimizer:
         lr: 0.001
         weight_decay: 0.0001
 trainer:
-    max_epochs: 1
+    max_epochs: 1000
     deterministic: true
     logger:
         class_path: pytorch_lightning.loggers.WandbLogger

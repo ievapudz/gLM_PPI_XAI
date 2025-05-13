@@ -105,6 +105,7 @@ class LogitsTensorCNN(nn.Module):
             torch.nn.Conv2d(self.num_in_channels, 1, kernel_size=5, stride=1, padding=0),
             torch.nn.MaxPool2d(2, stride=2)
         )
+        
         self.ppi_l = torch.nn.Sequential(
             torch.nn.Linear(512*512, 1),
             torch.nn.Sigmoid()
@@ -120,17 +121,29 @@ class LogitsTensorCNN(nn.Module):
     def forward(self, x, x_idx, stage):
         x['logits_tensors'] = self.get_input_pad(x['logits_tensors'])
         x['logits_tensors'] = x['logits_tensors'].to(self.device)
-        contact_pred = self.contact_l(x['logits_tensors'])
-        ppi_pred = self.ppi_l(torch.flatten(contact_pred, start_dim=1))
+        contact_l_out = self.contact_l(x['logits_tensors'])
+        contact_predictor = torch.nn.Sigmoid()
+        contact_pred = contact_predictor(contact_l_out)
+        ppi_pred = self.ppi_l(torch.flatten(contact_l_out, start_dim=1))
         labels = torch.round(ppi_pred).int()
-        return ppi_pred, labels        
+        return ppi_pred, labels, contact_pred     
 
-    def compute_loss(self, batch):
-        batch['predictions'] = batch['predictions'].squeeze()
-        loss = torch.nn.functional.binary_cross_entropy(
-            batch['predictions'].to(self.device).float(),
-            batch['label'].to(self.device).float()
+    def compute_loss(self, x):
+        x['predictions'] = x['predictions'].squeeze()
+        binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
+            x['predictions'].to(self.device).float(),
+            x['label'].to(self.device).float()
         )
+        if(torch.isnan(x['urq']).any()):
+            contact_loss = 0
+        else:
+            x['contact_pred'] = x['contact_pred'].squeeze()
+            contact_loss = torch.nn.functional.binary_cross_entropy(
+                x['contact_pred'].to(self.device).float(),
+                x['urq'].to(self.device).float()
+            )
+
+        loss = binary_ppi_loss + contact_loss
         return loss
 
 class PredictorPPI(LightningModule):
@@ -152,7 +165,7 @@ class PredictorPPI(LightningModule):
      
     def step(self, batch, batch_idx, split):
         batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
-        batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
+        batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         self.step_outputs[split] = batch
         loss = self.model.compute_loss(batch)

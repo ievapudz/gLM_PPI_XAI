@@ -10,12 +10,18 @@ model:
                 fast: true
                 tensor_path: ./outputs/logits_tensors/mint/
                 sep_chains: false
+        model:
+            class_path: gLM_CNN.models.LogitsTensorCNN
+            init_args:
+                tensor_dim: 1028
+                num_in_channels: 50
 data:
-    class_path: gLM.dataloader.SequencePairCJDataModule
+    class_path: gLM_CNN.dataloader.UQRDataModule
     init_args:
         fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
-        batch_size: 8192
+        urq_folder: ./outputs/logits_tensors/mint/
+        batch_size: 32
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -26,7 +32,7 @@ optimizer:
         lr: 0.001
         weight_decay: 0.0001
 trainer:
-    max_epochs: 1
+    max_epochs: 100
     deterministic: true
     logger:
         class_path: pytorch_lightning.loggers.WandbLogger

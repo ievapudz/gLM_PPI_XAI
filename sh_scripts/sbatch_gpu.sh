@@ -15,7 +15,7 @@ cat << EOF | sbatch
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=32G
 #SBATCH --partition=a100
 #SBATCH --qos=gpu1week
 #SBATCH --reservation=schwede
