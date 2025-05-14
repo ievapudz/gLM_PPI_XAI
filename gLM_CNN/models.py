@@ -120,16 +120,17 @@ class LogitsTensorCNN(nn.Module):
 
     def forward(self, x, x_idx, stage):
         x['logits_tensors'] = self.get_input_pad(x['logits_tensors'])
-        x['logits_tensors'] = x['logits_tensors'].to(self.device)
+        x['logits_tensors'] = x['logits_tensors'].squeeze().to(self.device)
         contact_l_out = self.contact_l(x['logits_tensors'])
         contact_predictor = torch.nn.Sigmoid()
-        contact_pred = contact_predictor(contact_l_out)
+        contact_pred = contact_predictor(contact_l_out).squeeze()
         ppi_pred = self.ppi_l(torch.flatten(contact_l_out, start_dim=1))
         labels = torch.round(ppi_pred).int()
         return ppi_pred, labels, contact_pred     
 
     def compute_loss(self, x):
         x['predictions'] = x['predictions'].squeeze()
+        x['label'] = x['label'].squeeze()
         binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
             x['predictions'].to(self.device).float(),
             x['label'].to(self.device).float()
@@ -138,6 +139,7 @@ class LogitsTensorCNN(nn.Module):
             contact_loss = 0
         else:
             x['contact_pred'] = x['contact_pred'].squeeze()
+            x['urq'] = x['urq'].squeeze()
             contact_loss = torch.nn.functional.binary_cross_entropy(
                 x['contact_pred'].to(self.device).float(),
                 x['urq'].to(self.device).float()
@@ -164,7 +166,7 @@ class PredictorPPI(LightningModule):
         return {"optimizer": self.optimizer, "scheduler": self.scheduler, "monitor": "validate/loss"}
      
     def step(self, batch, batch_idx, split):
-        batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
+        #batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         self.step_outputs[split] = batch
