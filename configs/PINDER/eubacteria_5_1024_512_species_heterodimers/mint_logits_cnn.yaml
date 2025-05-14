@@ -16,7 +16,7 @@ model:
                 tensor_dim: 1028
                 num_in_channels: 50
 data:
-    class_path: gLM_CNN.dataloader.UQRDataModule
+    class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
         fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/

@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 import os
 
-class UQRDataset(Dataset):
+class URQDataset(Dataset):
     """
     torch Dataset for upper-right quadrants (of a symmetrical 
     categorical Jacobian or a contact map)
@@ -69,7 +69,7 @@ class UQRDataset(Dataset):
         row['urq'] = self.urqs[pair_id]
         return row
 
-class UQRDataModule(LightningDataModule):
+class URQDataModule(LightningDataModule):
     """
     LightningDataModule for SequencePairDataset
     """
@@ -102,14 +102,14 @@ class UQRDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = UQRDataset(
+            self.train_dataset = URQDataset(
                 self.train_file,
                 self.fasta_file,
                 self.urq_folder,
                 self.num_samples,
                 self.concat_type
             )
-            self.val_dataset = UQRDataset(
+            self.val_dataset = URQDataset(
                 self.val_file,
                 self.fasta_file,
                 self.urq_folder,
@@ -118,7 +118,7 @@ class UQRDataModule(LightningDataModule):
             )
 
         if stage == "test":
-            self.test_dataset = UQRDataset(
+            self.test_dataset = URQDataset(
                 self.test_file,
                 self.fasta_file,
                 self.urq_folder,
