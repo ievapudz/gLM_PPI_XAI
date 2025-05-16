@@ -21,7 +21,7 @@ data:
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         urq_folder: ./outputs/urqs/contact_maps/
         tensor_dir: ./outputs/logits_tensors/glm2/
-        batch_size: 32
+        batch_size: 1024
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -32,7 +32,7 @@ optimizer:
         lr: 0.001
         weight_decay: 0.0001
 trainer:
-    max_epochs: 1
+    max_epochs: 1000
     deterministic: true
     logger:
         class_path: pytorch_lightning.loggers.WandbLogger
@@ -45,7 +45,12 @@ trainer:
             prefix: 'gLM2'
     enable_checkpointing: true
     callbacks:
-      - class_path: gLM.callbacks.SetupWandB 
+      - class_path: gLM.callbacks.SetupWandB
+      - class_path: pytorch_lightning.callbacks.EarlyStopping
+        init_args:
+            patience: 5
+            monitor: validate/loss
+            mode: min
       - class_path: gLM.callbacks.OutputLoggingCallback
         init_args:
             log_every_n_steps: 1
@@ -70,9 +75,10 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/Loading/
+            dirpath: logs/LogitsTensorsCNN/gLM2/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
             save_last: true
             save_top_k: 1
+ckpt_path: logs/LogitsTensorsCNN/gLM2/checkpoints/optimized/model-epoch=19.ckpt

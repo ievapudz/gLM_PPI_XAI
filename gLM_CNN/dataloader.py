@@ -72,85 +72,6 @@ class URQDataset(Dataset):
         row['urq'] = self.urqs[pair_id]
         return row
 
-class URQBatchDataset(Dataset):
-    def __init__(self, data_file, urq_dir, tensor_dir, split, num_samples, batch_size):
-        self.batch_size = batch_size
-        self.tensor_dir = tensor_dir
-        self.split = split
-
-        # Load data_file
-        processor = Processor(None, data_file, None)
-        df = processor.load_pair_list()
-
-        if num_samples is not None:
-            df = df.head(num_samples)
-
-        print(
-            "Num positive pairs:",
-            len(df[df["label"] == 1]),
-            "\nNum negative pairs:",
-            len(df[df["label"] == 0]),
-        )
-
-        # Load urqs
-        self.urqs = self.load_contact_urqs(df, urq_dir)
-
-        # Store them into batches (list of dicts)
-        num_batches = len(df) // batch_size
-        self.batches = []
-        for i in range(num_batches):
-            batch = {'concat_id': [], 'label': [], 'urq': None}
-            prot1 = df['protein1'][i*batch_size:(i+1)*batch_size].tolist()
-            prot2 = df['protein2'][i*batch_size:(i+1)*batch_size].tolist()
-            batch['concat_id'] = self.get_concat_ids(prot1, prot2)
-            batch['label'] = torch.tensor(df['label'][i*batch_size:(i+1)*batch_size].values)
-            batch['urq'] = self.get_contact_urqs_batch(batch['concat_id'])
-            self.batches.append(batch)
-
-        os.makedirs(f"{tensor_dir}/batched_{split}/", exist_ok=True)
-
-        # Make batch pt files of the logits tensors
-        for i, batch in enumerate(self.batches):
-            concat_ids = batch['concat_id']
-            tensors = [torch.load(f"{tensor_dir}/{c}_fastLogits.pt") for c in concat_ids]
-            batch_tensors = torch.cat(tensors, dim=0)
-            torch.save(batch_tensors, f"{tensor_dir}/batched_{split}/batch_{i}.pt")
-
-    def get_concat_ids(self, prot1, prot2):
-        concat_ids = list(map(lambda a, b: f"{a}-{b}".translate(
-            str.maketrans({'_': '-', '-': '_'})
-        ), prot1, prot2))
-        return concat_ids
-
-    def load_contact_urqs(self, data, urq_dir):
-        urqs = {}
-
-        for index, row in data.iterrows():
-            concat_id = row['protein1'] + '-' + row['protein2']
-            concat_id = concat_id.translate(str.maketrans({'_': '-', '-': '_'}))
-
-            if(row['label']):
-                urq_path = f"{urq_dir}/{concat_id}.pt"
-                urqs[concat_id] = torch.load(urq_path) if(os.path.exists(urq_path)) else torch.empty(512, 512).fill_(float('nan'))
-            else:
-                urqs[concat_id] = torch.zeros(512, 512)
-
-        return urqs
-
-    def get_contact_urqs_batch(self, ids):
-        urq_batch = [self.urqs[key] for key in ids]
-        urq_batch = torch.stack(urq_batch)
-        return urq_batch
-
-    def __len__(self):
-        return len(self.batches)
-
-    def __getitem__(self, idx):
-        # Take the element of the list of dicts and append it with logit tensors from the batch pt file
-        item = self.batches[idx]
-        item['logits_tensors'] = torch.load(f"{self.tensor_dir}/batched_{self.split}/batch_{idx}.pt")
-        return item
-
 class URQDataModule(LightningDataModule):
     """
     LightningDataModule for URQDataset
@@ -187,37 +108,33 @@ class URQDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = URQBatchDataset(
+            self.train_dataset = URQDataset(
                 self.train_file,
+                self.fasta_file,
                 self.urq_folder,
-                self.tensor_dir,
-                "train",
                 self.num_samples,
-                self.batch_size
+                self.concat_type,
             )
-            self.val_dataset = URQBatchDataset(
+            self.val_dataset = URQDataset(
                 self.val_file,
+                self.fasta_file,
                 self.urq_folder,
-                self.tensor_dir,
-                "validate",
                 self.num_samples,
-                self.batch_size
+                self.concat_type,
             )
 
         if stage == "test":
-            self.test_dataset = URQBatchDataset(
+            self.test_dataset = URQDataset(
                 self.test_file,
+                self.fasta_file,
                 self.urq_folder,
-                self.tensor_dir,
-                "test",
                 self.num_samples,
-                self.batch_size
+                self.concat_type,
             )
-
     def train_dataloader(self):
         loader = DataLoader(
             self.train_dataset,
-            batch_size=1,
+            batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
@@ -227,7 +144,7 @@ class URQDataModule(LightningDataModule):
     def val_dataloader(self):
         loader = DataLoader(
             self.val_dataset,
-            batch_size=1,
+            batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
@@ -237,7 +154,7 @@ class URQDataModule(LightningDataModule):
     def test_dataloader(self):
         loader = DataLoader(
             self.test_dataset,
-            batch_size=1,
+            batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
