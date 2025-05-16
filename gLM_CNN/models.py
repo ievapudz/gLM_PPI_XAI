@@ -16,12 +16,13 @@ import os
 from gLM.LMs import gLM2 as BioLM_gLM2
 from gLM.LMs import ESM2
 from gLM.LMs import MINT
+from gLM.models import CategoricalJacobian
 
 TOKENIZERS_PARALLELISM = False
 
 class LogitsTensorGenerator(nn.Module):
     def __init__(self, model_path: str, config_path: str, fast: bool, 
-        tensor_path: str, sep_chains=False, max_L=1024):
+        tensor_path: str, sep_chains=False, max_L=1028):
         super().__init__()
         self.fast = fast
         self.logits_type = 'fast' if(self.fast) else 'full'
@@ -30,13 +31,10 @@ class LogitsTensorGenerator(nn.Module):
         # TODO: improve this determination
         if("gLM2" in model_path):
             self.LM = BioLM_gLM2(model_path)
-            self.max_L = max_L + 2
         elif("esm2" in model_path):
             self.LM = ESM2(model_path)
-            self.max_L = max_L + 3
         elif("mint" in model_path):
             self.LM = MINT(model_path, config_path, sep_chains)
-            self.max_L = max_L + 4
         for param in self.LM.model.parameters():
             param.requires_grad = False
 
@@ -47,7 +45,7 @@ class LogitsTensorGenerator(nn.Module):
         L, _, _, TT = tensor.shape
         pad_tot = self.max_L - L
         if pad_tot < 0:
-            raise ValueError(f"L ({L}) is greater than L_max ({L_max})")
+            raise ValueError(f"L ({L}) is greater than max_L ({self.max_L})")
         pad_left = pad_tot // 2
         pad_right = pad_tot - pad_left        
 
@@ -74,7 +72,7 @@ class LogitsTensorGenerator(nn.Module):
         # Concatenating into shape: [L, 1, L, T+T]
         logits_tensor = torch.cat([fx_h, fx_expanded], dim=-1)
         
-        # Padded: [1, T+T, max_L, max_L]
+        # Reorganised and padded: [1, T+T, max_L, max_L]
         logits_tensor = self.pad(logits_tensor)
         
         return logits_tensor
@@ -90,6 +88,77 @@ class LogitsTensorGenerator(nn.Module):
             tensors = torch.cat((tensors, tensor), dim=0) if(i) else tensor
 
         return tensors 
+
+class CategoricalJacobianURQGenerator(nn.Module):
+    def __init__(self, model_path: str, config_path: str,
+        cj_path: str, cj_type: str, distance: str, 
+        sep_chains=False, n=3, max_L=512):
+        
+        super().__init__()
+
+        self.cj_gen = CategoricalJacobian(
+            model_path=model_path,
+            config_path=config_path,
+            fast=(cj_type == 'fast'),
+            matrix_path=cj_path,
+            distance=distance,
+            sep_chains=sep_chains
+        )
+
+        self.cj_path = cj_path
+        self.cj_type = cj_type
+        self.n = n # Number of standard deviations for threshold
+        self.max_L = max_L
+
+    def pad(self, urq):
+        m, n = urq.shape
+        pad_hori = self.max_L - m
+        pad_verti = self.max_L - n
+        
+        if pad_hori < 0 or pad_verti < 0:
+            raise ValueError(f"m or n is greater than {max_L}")
+        
+        pad_top = pad_hori // 2
+        pad_bot = pad_hori - pad_top
+        pad_left = pad_verti // 2
+        pad_right = pad_verti - pad_left
+        
+        return F.pad(urq, (pad_left, pad_right, pad_top, pad_bot), mode='constant', value=0.0)
+
+    def get_urq(self, cj, length1: int, n: float):
+        # Setting the threshold for the binarisation of the signals
+        m = np.mean(cj)
+        s = np.std(cj)
+        threshold = m+n*s
+
+        urq_cj_bin = None
+        # Retrieving upper-right quadrant and skipping the tokens <+>
+        if(isinstance(self.cj_gen.LM, BioLM_gLM2)):
+            urq_cj = cj[1:length1+1, length1+2:]
+            urq_cj_bin = np.where(urq_cj > threshold, 1, 0)
+        elif(isinstance(self.cj_gen.LM, MINT)):
+            urq_cj = cj[1:length1+1, length1+3:-1]
+            urq_cj_bin = np.where(urq_cj > threshold, 1, 0)
+        # TODO: implement ESM2 case
+
+        urq_cj = torch.from_numpy(urq_cj)
+        urq_cj = self.pad(urq_cj)
+        urq_cj = torch.unsqueeze(urq_cj, dim=0)
+ 
+        return urq_cj
+
+    def forward(self, x, x_idx, stage):
+        urqs = None
+        for i, s in enumerate(x['sequence']):
+            if(self.cj_gen.is_computed(x['concat_id'][i])):
+                matrix = np.load(f"{self.cj_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
+            else:
+                matrix = self.cj_gen.get_matrix(s, x['length1'][i])
+                np.save(f"{self.cj_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", matrix)
+            urq = self.get_urq(matrix, x['length1'][i], n=self.n)
+            urqs = torch.cat((urqs, urq), dim=0) if(i) else urq
+
+        return urqs
 
 class LogitsTensorCNN(nn.Module):
     def __init__(self, tensor_dim: int, num_in_channels: int):
@@ -112,6 +181,10 @@ class LogitsTensorCNN(nn.Module):
         )
 
     def get_input_pad(self, x):
+        # TODO: to do full padding within the generator class
+        #       It was done here additionally because the logits
+        #       were generated with too little padding for the chosen
+        #       architecture.
         in_pad = self.max_tensor_dim - self.tensor_dim
         left_pad = in_pad // 2
         right_pad = in_pad - left_pad
@@ -119,18 +192,18 @@ class LogitsTensorCNN(nn.Module):
         return x
 
     def forward(self, x, x_idx, stage):
-        x['logits_tensors'] = self.get_input_pad(x['logits_tensors'])
-        x['logits_tensors'] = x['logits_tensors'].squeeze().to(self.device)
-        contact_l_out = self.contact_l(x['logits_tensors'])
+        x['input'] = self.get_input_pad(x['input'])
+        x['input'] = x['input'].squeeze().to(self.device)
+        contact_l_out = self.contact_l(x['input'])
         contact_predictor = torch.nn.Sigmoid()
-        contact_pred = contact_predictor(contact_l_out).squeeze()
+        #contact_pred = contact_predictor(contact_l_out).squeeze()
+        contact_pred = contact_predictor(contact_l_out)
         ppi_pred = self.ppi_l(torch.flatten(contact_l_out, start_dim=1))
         labels = torch.round(ppi_pred).int()
         return ppi_pred, labels, contact_pred     
 
     def compute_loss(self, x):
         x['predictions'] = x['predictions'].squeeze()
-        x['label'] = x['label'].squeeze()
         binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
             x['predictions'].to(self.device).float(),
             x['label'].to(self.device).float()
@@ -139,13 +212,46 @@ class LogitsTensorCNN(nn.Module):
             contact_loss = 0
         else:
             x['contact_pred'] = x['contact_pred'].squeeze()
-            x['urq'] = x['urq'].squeeze()
             contact_loss = torch.nn.functional.binary_cross_entropy(
                 x['contact_pred'].to(self.device).float(),
                 x['urq'].to(self.device).float()
             )
 
         loss = binary_ppi_loss + contact_loss
+        return loss
+
+class CategoricalJacobianURQCNN(nn.Module):
+    def __init__(self, matrix_dim: int):
+        super(CategoricalJacobianURQCNN, self).__init__()
+        self.matrix_dim = matrix_dim 
+
+        self.max_matrix_dim = 512
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        self.layers = torch.nn.Sequential(
+            torch.nn.Conv2d(1, 1, kernel_size=5, stride=1, padding=0),
+            torch.nn.Flatten(start_dim=2),
+            torch.nn.Linear(508*508, 1),
+            torch.nn.Sigmoid()
+        )
+
+    def forward(self, x, x_idx, stage):
+        x['input'] = torch.unsqueeze(x['input'], dim=1)
+        ppi_pred = self.layers(x['input'])
+        labels = torch.round(ppi_pred).int()
+        labels = torch.squeeze(labels)
+        return ppi_pred, labels, None
+
+    def compute_loss(self, x):
+        x['predictions'] = x['predictions'].squeeze()
+        
+        binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
+            x['predictions'].to(self.device).float(),
+            x['label'].to(self.device).float()
+        )
+
+        loss = binary_ppi_loss
         return loss
 
 class PredictorPPI(LightningModule):
@@ -166,7 +272,7 @@ class PredictorPPI(LightningModule):
         return {"optimizer": self.optimizer, "scheduler": self.scheduler, "monitor": "validate/loss"}
      
     def step(self, batch, batch_idx, split):
-        #batch['logits_tensors'] = self.logits_model(batch, batch_idx, split)
+        batch['input'] = self.logits_model(batch, batch_idx, split)
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         self.step_outputs[split] = batch

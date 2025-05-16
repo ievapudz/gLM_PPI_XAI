@@ -124,6 +124,22 @@ class CategoricalJacobian(nn.Module):
         if(cj_path.is_file() and cj_path.stat().st_size != 0):
             return True
 
+    def get_matrix(self, sequence: str, length1: int):
+        contacts, tokens = self.get_contacts(sequence, length1)
+        df = self.contact_to_dataframe(contacts)
+
+        pivot_df = df.pivot(index='i', columns='j', values='value')
+
+        sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
+        sorted_cols = [str(item) for item in sorted_cols]
+        pivot_df = pivot_df[sorted_cols]
+
+        pivot_df.index = pivot_df.index.astype(int)
+        pivot_df = pivot_df.sort_index()
+
+        matrix = pivot_df.to_numpy()
+        return matrix
+
     def outlier_count(self, array, upper_right_quadrant, n=3):
         m = np.mean(array)
         s = np.std(array)
@@ -176,22 +192,7 @@ class CategoricalJacobian(nn.Module):
                 # Load the already computed matrix
                 array_2d = np.load(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
             else:
-                contacts, tokens = self.get_contacts(s, x['length1'][i])
-                df = self.contact_to_dataframe(contacts)
-
-                # TODO: perhaps this chunk of code could be optimized?
-                pivot_df = df.pivot(index='i', columns='j', values='value')
-
-                sorted_cols = sorted([int(item) for item in pivot_df.columns], key=int)
-                sorted_cols = [str(item) for item in sorted_cols]
-                pivot_df = pivot_df[sorted_cols]
-
-                # Sorting the rows
-                pivot_df.index = pivot_df.index.astype(int)
-                pivot_df = pivot_df.sort_index()
-
-                # Convert the pivot table to a 2D numpy array
-                array_2d = pivot_df.to_numpy()
+                array_2d = self.get_matrix(s, x['length1'][i])
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
 
             # Detect the PPI signal in the CJ
