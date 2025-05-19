@@ -116,7 +116,7 @@ class CategoricalJacobianURQGenerator(nn.Module):
         pad_verti = self.max_L - n
         
         if pad_hori < 0 or pad_verti < 0:
-            raise ValueError(f"m or n is greater than {max_L}")
+            raise ValueError(f"m or n is greater than {self.max_L}")
         
         pad_top = pad_hori // 2
         pad_bot = pad_hori - pad_top
@@ -225,27 +225,38 @@ class CategoricalJacobianURQCNN(nn.Module):
         super(CategoricalJacobianURQCNN, self).__init__()
         self.matrix_dim = matrix_dim 
 
-        self.max_matrix_dim = 512
+        self.max_matrix_dim = 513
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.layers = torch.nn.Sequential(
             torch.nn.Conv2d(1, 1, kernel_size=5, stride=1, padding=0),
-            torch.nn.Flatten(start_dim=2),
-            torch.nn.Linear(508*508, 1),
+            torch.nn.LeakyReLU(0.01),
+            torch.nn.MaxPool2d(3, stride=2),
+            torch.nn.Conv2d(1, 1, kernel_size=5, stride=1, padding=0),
+            torch.nn.LeakyReLU(0.01),
+        )
+        self.layers_2 = torch.nn.Sequential(
+            torch.nn.Flatten(start_dim=1),
+            torch.nn.Linear(125*125, 1),
             torch.nn.Sigmoid()
         )
 
     def forward(self, x, x_idx, stage):
-        x['input'] = torch.unsqueeze(x['input'], dim=1)
-        ppi_pred = self.layers(x['input'])
+        x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
+        
+        intermed = self.layers(x['input'])
+        torch.set_printoptions(profile="full")
+        print("intermed: ", intermed, torch.sum(intermed), intermed.shape)
+
+        ppi_pred = self.layers_2(intermed)
         labels = torch.round(ppi_pred).int()
         labels = torch.squeeze(labels)
         return ppi_pred, labels, None
 
     def compute_loss(self, x):
         x['predictions'] = x['predictions'].squeeze()
-        
+
         binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
             x['predictions'].to(self.device).float(),
             x['label'].to(self.device).float()

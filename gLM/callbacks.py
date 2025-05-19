@@ -50,10 +50,9 @@ def log_classification_metrics(
         log_dict[f"{prefix}_pr_auc"] = pr_auc
 
     if "confusion_matrix" in metrics_to_plot:
-        cm = confusion_matrix(y_true_lab, y_pred_lab)
-        # Extract TN, FP, FN, TP
+        cm = confusion_matrix(y_true_lab, y_pred_lab, labels=[0, 1])
         tn, fp, fn, tp = cm.ravel()
-        
+ 
         # Create a labeled confusion matrix
         labeled_cm = np.array([['TN', tn], ['FP', fp], ['FN', fn], ['TP', tp]])
 
@@ -62,7 +61,7 @@ def log_classification_metrics(
 
     if "classification_report" in metrics_to_plot:
         class_report = metrics.classification_report(
-            y_true_lab, y_pred_lab, target_names=class_names
+            y_true_lab, y_pred_lab, target_names=class_names, labels=[0, 1]
         ).split("\n")
         report_columns = ["Class", "Precision", "Recall", "F1-score", "Support"]
         report_table = []
