@@ -20,11 +20,11 @@ model:
 data:
     class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
-        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
-        data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
+        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species/sequences.fasta
+        data_folder: ./data/PINDER/eubacteria_5_1024_512_species/
         urq_folder: ./outputs/urqs/contact_maps/
         tensor_dir: ./outputs/categorical_jacobians/glm2_cosine/
-        batch_size: 32
+        batch_size: 4096
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -84,3 +84,4 @@ trainer:
             mode: min
             save_last: true
             save_top_k: 1
+ckpt_path: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/model-epoch=9.ckpt 

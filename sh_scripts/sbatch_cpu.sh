@@ -12,8 +12,8 @@ cat << EOF | sbatch
 #SBATCH --job-name=gLM_"$JOB_NAME"
 #SBATCH --nodes=1
 #SBATCH --output=logs/slurm/"$JOB_NAME".out
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=10G
 #SBATCH --qos=1day
 
 # activate conda env

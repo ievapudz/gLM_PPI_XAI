@@ -2,6 +2,8 @@
 
 # Retrieve command name from the command line
 JOB_NAME=$1
+SPLIT=$2
+BIOLM=$3
 
 mkdir -p logs/slurm
 
@@ -19,6 +21,6 @@ cat << EOF | sbatch
 export PATH=/scicore/home/schwede/pudziu0000/mambaforge/bin:$PATH
 source activate glam
 
-srun python3 data_process/contact_map.py
+srun python3 data_process/contact_map.py -s $SPLIT -b $BIOLM
 
 EOF

@@ -230,12 +230,14 @@ class CategoricalJacobianURQCNN(nn.Module):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.layers = torch.nn.Sequential(
-            torch.nn.Conv2d(1, 3, kernel_size=9, stride=4, padding=0),
+            torch.nn.BatchNorm2d(1),
+            torch.nn.Conv2d(1, 2, kernel_size=9, stride=4, padding=0),
             torch.nn.LeakyReLU(0.01),
-            torch.nn.Conv2d(3, 3, kernel_size=5, stride=2, padding=0),
+            torch.nn.Conv2d(2, 2, kernel_size=5, stride=2, padding=0),
             torch.nn.LeakyReLU(0.01),
             torch.nn.Flatten(start_dim=1),
-            torch.nn.Linear(62*62*3, 1),
+            torch.nn.Linear(62*62*2, 1),
+            torch.nn.Dropout(0.8),
         )
         self.layers_2 = torch.nn.Sequential(
             torch.nn.Sigmoid()
