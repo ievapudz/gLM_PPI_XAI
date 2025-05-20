@@ -12,10 +12,11 @@ model:
                 distance: cosine
                 sep_chains: true
                 n: 3
+                max_L: 513
         model:
             class_path: gLM_CNN.models.CategoricalJacobianURQCNN
             init_args:
-                matrix_dim: 512
+                matrix_dim: 513
 data:
     class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
@@ -23,10 +24,10 @@ data:
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         urq_folder: ./outputs/urqs/contact_maps/
         tensor_dir: ./outputs/categorical_jacobians/glm2_cosine/
-        batch_size: 4
+        batch_size: 32
         positive_only: false
         num_workers: 4
-        num_samples: 10
+        num_samples: null
         concat_type: "gLM2"
 optimizer:
     class_path: torch.optim.Adam
@@ -34,7 +35,7 @@ optimizer:
         lr: 0.001
         weight_decay: 0.0001
 trainer:
-    max_epochs: 1
+    max_epochs: 100
     deterministic: true
     logger:
         class_path: pytorch_lightning.loggers.WandbLogger
@@ -50,7 +51,7 @@ trainer:
       - class_path: gLM.callbacks.SetupWandB
       - class_path: pytorch_lightning.callbacks.EarlyStopping
         init_args:
-            patience: 5
+            patience: 10
             monitor: validate/loss
             mode: min
       - class_path: gLM.callbacks.OutputLoggingCallback

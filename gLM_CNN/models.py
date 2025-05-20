@@ -230,15 +230,14 @@ class CategoricalJacobianURQCNN(nn.Module):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.layers = torch.nn.Sequential(
-            torch.nn.Conv2d(1, 1, kernel_size=5, stride=1, padding=0),
+            torch.nn.Conv2d(1, 3, kernel_size=9, stride=4, padding=0),
             torch.nn.LeakyReLU(0.01),
-            torch.nn.MaxPool2d(3, stride=2),
-            torch.nn.Conv2d(1, 1, kernel_size=5, stride=1, padding=0),
+            torch.nn.Conv2d(3, 3, kernel_size=5, stride=2, padding=0),
             torch.nn.LeakyReLU(0.01),
+            torch.nn.Flatten(start_dim=1),
+            torch.nn.Linear(62*62*3, 1),
         )
         self.layers_2 = torch.nn.Sequential(
-            torch.nn.Flatten(start_dim=1),
-            torch.nn.Linear(125*125, 1),
             torch.nn.Sigmoid()
         )
 
@@ -246,9 +245,6 @@ class CategoricalJacobianURQCNN(nn.Module):
         x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
         
         intermed = self.layers(x['input'])
-        torch.set_printoptions(profile="full")
-        print("intermed: ", intermed, torch.sum(intermed), intermed.shape)
-
         ppi_pred = self.layers_2(intermed)
         labels = torch.round(ppi_pred).int()
         labels = torch.squeeze(labels)
