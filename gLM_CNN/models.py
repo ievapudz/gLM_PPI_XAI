@@ -230,7 +230,7 @@ class CategoricalJacobianURQCNN(nn.Module):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.layers = torch.nn.Sequential(
-            torch.nn.BatchNorm2d(1),
+            torch.nn.InstanceNorm2d(1),
             torch.nn.Conv2d(1, 2, kernel_size=9, stride=4, padding=0),
             torch.nn.LeakyReLU(0.01),
             torch.nn.Conv2d(2, 2, kernel_size=5, stride=2, padding=0),
@@ -242,6 +242,17 @@ class CategoricalJacobianURQCNN(nn.Module):
         self.layers_2 = torch.nn.Sequential(
             torch.nn.Sigmoid()
         )
+
+        # Initialisation of the weights
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, torch.nn.Conv2d):
+                torch.nn.init.kaiming_normal_(layer.weight, a=0.01, mode='fan_out', nonlinearity='leaky_relu')
+                if layer.bias is not None:
+                    torch.nn.init.constant_(layer.bias, 0)
+                    
+            elif isinstance(layer, torch.nn.Linear):
+                torch.nn.init.kaiming_normal_(layer.weight, a=0.01, mode='fan_in', nonlinearity='leaky_relu')
+                torch.nn.init.constant_(layer.bias, 0)
 
     def forward(self, x, x_idx, stage):
         x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
@@ -274,7 +285,7 @@ class PredictorPPI(LightningModule):
         self.configure_optimizers(self.model.parameters())
 
     def configure_optimizers(self, params):
-        self.optimizer = torch.optim.AdamW(params, lr=0.001, betas=(0.9, 0.98), weight_decay=0.01)
+        self.optimizer = torch.optim.AdamW(params, lr=0.001, betas=(0.9, 0.98), weight_decay=0.1)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="min", factor=0.5, patience=3, verbose=True
         )

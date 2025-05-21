@@ -43,13 +43,13 @@ class CategoricalJacobian(nn.Module):
         pathlib.Path(self.matrix_path).mkdir(parents=True, exist_ok=True)
     
     def cosine_dissimilarity(self, fx_h, fx):
-        # Vectorised cosine dissimilarity computation for fast version of CJ computations
-        cos = torch.nn.CosineSimilarity(dim=2)
-        # NOTE: 4 is the index of the first aa token in gLM2 and ESM2
-        #       It might be important to consider for other pLMs.
-        jac = (torch.clamp(cos(fx_h[:, 4], fx[:, 4]), -1.0, 1.0)+1)/2
-        jac = torch.ones_like(jac) - jac
-        return jac
+        cos = torch.nn.CosineSimilarity(dim=-1)
+        similarity = cos(fx_h, fx)
+        similarity = (torch.clamp(similarity, -1.0, 1.0)+1)/2
+        dissimilarity = torch.ones_like(similarity) - similarity
+        dissimilarity = dissimilarity.squeeze()
+
+        return dissimilarity
 
     def get_cosine_contacts(self, fx_h, fx, masks):
         fx_h_masked = self.LM.apply_masks(fx_h, masks)
