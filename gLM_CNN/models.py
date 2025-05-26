@@ -342,13 +342,10 @@ class CategoricalJacobianCNN(nn.Module):
         self.layers = torch.nn.Sequential(
             torch.nn.InstanceNorm2d(1),
             torch.nn.Conv2d(1, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
-            nn.BatchNorm2d(out_channels[0]),
             nn.LeakyReLU(0.01),
             torch.nn.Conv2d(out_channels[0], out_channels[1], kernel_size=kernel_sizes[1], padding=0),
-            nn.BatchNorm2d(out_channels[1]),
             nn.LeakyReLU(0.01),
             torch.nn.Conv2d(out_channels[1], out_channels[2], kernel_size=kernel_sizes[2], padding=0),
-            nn.BatchNorm2d(out_channels[2]),
             nn.LeakyReLU(0.01),
             torch.nn.Flatten(start_dim=1),
             torch.nn.Linear(last_dim*last_dim*out_channels[2], out_channels[-1]),
