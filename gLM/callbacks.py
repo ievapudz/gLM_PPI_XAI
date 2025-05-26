@@ -27,7 +27,8 @@ def log_classification_metrics(
         "classification_report",
     ),
     class_names=["Negative", "Positive"],
-    y_pred=None
+    y_pred=None,
+    split='train'
 ):
     log_dict = {}
 
@@ -38,7 +39,9 @@ def log_classification_metrics(
     num_classes = len(class_names)
 
     if "mcc" in metrics_to_plot:
-        log_dict[f"{prefix}_mcc"] = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+        mcc = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+        log_dict[f"{prefix}_mcc"] = mcc
+        print(f"{split} mcc: {mcc:.3f}")
 
     if "roc" in metrics_to_plot or "roc_auc" in metrics_to_plot:
         log_dict[f"{prefix}_roc_auc"] = metrics.roc_auc_score(y_true_lab, y_pred)
@@ -139,6 +142,7 @@ class OutputLoggingCallback(Callback):
             trainer=trainer,
             class_names=self.class_names,
             metrics_to_plot=self.metrics_to_plot,
+            split=split
         )
 
         trainer.logger.experiment.log(log_dict)

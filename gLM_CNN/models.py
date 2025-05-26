@@ -333,7 +333,7 @@ class CategoricalJacobianCNN(nn.Module):
 
         kernel_sizes = [3, 3, 3]
         strides = [1, 1, 1]
-        out_channels = [256, 256, 256, 1]
+        out_channels = [128, 128, 128, 1]
         
         last_dim = self.matrix_dim
         for i, k in enumerate(kernel_sizes):
@@ -430,7 +430,7 @@ class PredictorPPI(LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        print("epoch train loss: ", self.train_loss_accum/self.train_num_steps)
+        print(f"epoch train loss: {self.train_loss_accum/self.train_num_steps:.3f}")
         self.train_loss_accum = 0
         self.train_num_steps = 0
 
@@ -441,7 +441,7 @@ class PredictorPPI(LightningModule):
         return loss
 
     def on_validation_epoch_end(self):
-        print("epoch val loss: ", self.val_loss_accum/self.val_num_steps)
+        print(f"epoch val loss: {self.val_loss_accum/self.val_num_steps:.3f}")
         self.val_loss_accum = 0
         self.val_num_steps = 0
 
