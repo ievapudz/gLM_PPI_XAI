@@ -160,6 +160,55 @@ class CategoricalJacobianURQGenerator(nn.Module):
 
         return urqs
 
+class CategoricalJacobianGenerator(nn.Module):
+    def __init__(self, model_path: str, config_path: str,
+        cj_path: str, cj_type: str, distance: str,
+        sep_chains=False, n=3, max_L=1024):
+
+        super().__init__()
+
+        self.cj_gen = CategoricalJacobian(
+            model_path=model_path,
+            config_path=config_path,
+            fast=(cj_type == 'fast'),
+            matrix_path=cj_path,
+            distance=distance,
+            sep_chains=sep_chains
+        )
+
+        self.cj_path = cj_path
+        self.cj_type = cj_type
+        self.n = n # Number of standard deviations for threshold
+        self.max_L = max_L
+
+    def pad(self, matrix):
+        n, _ = matrix.shape
+        matrix = torch.from_numpy(matrix)
+        pad = self.max_L - n
+
+        if pad < 0:
+            raise ValueError(f"n is greater than {self.max_L}")
+
+        pad_1 = pad // 2
+        pad_2 = pad - pad_1
+
+        return F.pad(matrix, (pad_1, pad_2, pad_1, pad_2), mode='constant', value=0.0)
+
+    def forward(self, x, x_idx, stage):
+        matrices = None
+        for i, s in enumerate(x['sequence']):
+            if(self.cj_gen.is_computed(x['concat_id'][i])):
+                matrix = np.load(f"{self.cj_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy")
+            else:
+                matrix = self.cj_gen.get_matrix(s, x['length1'][i])
+                np.save(f"{self.cj_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", matrix)
+            matrix = self.pad(matrix)
+            matrix = torch.unsqueeze(matrix, dim=0)
+            matrices = torch.cat((matrices, matrix), dim=0) if(i) else matrix
+
+        return matrices
+
+
 class LogitsTensorCNN(nn.Module):
     def __init__(self, tensor_dim: int, num_in_channels: int):
         super(LogitsTensorCNN, self).__init__()
@@ -274,48 +323,130 @@ class CategoricalJacobianURQCNN(nn.Module):
         loss = binary_ppi_loss
         return loss
 
+class CategoricalJacobianCNN(nn.Module):
+    def __init__(self, matrix_dim: int):
+        super(CategoricalJacobianCNN, self).__init__()
+        self.matrix_dim = matrix_dim
+
+        self.max_matrix_dim = 1026
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+        kernel_sizes = [3, 3, 3]
+        strides = [1, 1, 1]
+        out_channels = [256, 256, 256, 1]
+        
+        last_dim = self.matrix_dim
+        for i, k in enumerate(kernel_sizes):
+            last_dim = int((last_dim - k)/strides[i] + 1)
+
+        self.layers = torch.nn.Sequential(
+            torch.nn.InstanceNorm2d(1),
+            torch.nn.Conv2d(1, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
+            nn.BatchNorm2d(out_channels[0]),
+            nn.LeakyReLU(0.01),
+            torch.nn.Conv2d(out_channels[0], out_channels[1], kernel_size=kernel_sizes[1], padding=0),
+            nn.BatchNorm2d(out_channels[1]),
+            nn.LeakyReLU(0.01),
+            torch.nn.Conv2d(out_channels[1], out_channels[2], kernel_size=kernel_sizes[2], padding=0),
+            nn.BatchNorm2d(out_channels[2]),
+            nn.LeakyReLU(0.01),
+            torch.nn.Flatten(start_dim=1),
+            torch.nn.Linear(last_dim*last_dim*out_channels[2], out_channels[-1]),
+        )
+        self.layers_2 = torch.nn.Sequential(
+            torch.nn.Sigmoid()
+        )
+
+        # Initialisation of the weights
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, torch.nn.Conv2d):
+                torch.nn.init.kaiming_normal_(layer.weight, a=0.01, mode='fan_out', nonlinearity='leaky_relu')
+                if layer.bias is not None:
+                    torch.nn.init.constant_(layer.bias, 0)
+
+            elif isinstance(layer, torch.nn.Linear):
+                torch.nn.init.kaiming_normal_(layer.weight, a=0.01, mode='fan_in', nonlinearity='leaky_relu')
+                torch.nn.init.constant_(layer.bias, 0)
+    
+    def forward(self, x, x_idx, stage):
+        x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
+
+        intermed = self.layers(x['input'])
+        ppi_pred = intermed
+        labels = torch.round(self.layers_2(intermed)).int()
+        labels = torch.squeeze(labels)
+        return ppi_pred, labels, None
+
+    def compute_loss(self, x):
+        x['predictions'] = x['predictions'].squeeze()
+
+        loss = torch.nn.BCEWithLogitsLoss()
+        binary_ppi_loss = loss(
+            x['predictions'].to(self.device).float(),
+            x['label'].to(self.device).float()
+        )
+
+        loss = binary_ppi_loss
+        return loss
+
+
 class PredictorPPI(LightningModule):
     def __init__(self, logits_model: nn.Module, model: nn.Module):
         super().__init__()
         self.logits_model = logits_model
         self.model = model
         self.save_hyperparameters()
-        self.loss_accum = 0
-        self.num_steps = 0
-        self.configure_optimizers(self.model.parameters())
+        self.train_loss_accum = 0
+        self.train_num_steps = 0
+        self.val_loss_accum = 0
+        self.val_num_steps = 0
 
-    def configure_optimizers(self, params):
-        self.optimizer = torch.optim.AdamW(params, lr=0.001, betas=(0.9, 0.98), weight_decay=0.1)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=3, verbose=True
-        )
-        return {"optimizer": self.optimizer, "scheduler": self.scheduler, "monitor": "validate/loss"}
-     
+        self.epoch_outputs = {
+            'train': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            },
+            'validate': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            }, 
+            'test': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            }
+        }
+
     def step(self, batch, batch_idx, split):
         batch['input'] = self.logits_model(batch, batch_idx, split)
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
-        self.step_outputs[split] = batch
         loss = self.model.compute_loss(batch)
         self.log(f'{split}/loss', loss.detach().cpu().item(), on_step=True, on_epoch=True)
+
+        for key in self.epoch_outputs[split]:
+            if key in batch:
+                self.epoch_outputs[split][key].extend(batch[key])
+
         return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'train')
-        self.loss_accum += loss.detach().cpu().item()
-        self.num_steps += 1
+        self.train_loss_accum += loss.detach().cpu().item()
+        self.train_num_steps += 1
         return loss
 
     def on_train_epoch_end(self):
-        self.scheduler.step(self.loss_accum / self.num_steps + 1)
-        self.loss_accum = 0
-        self.num_steps = 0
-        self.step_outputs["train"].clear()
-        self.step_outputs["validate"].clear()
+        print("epoch train loss: ", self.train_loss_accum/self.train_num_steps)
+        self.train_loss_accum = 0
+        self.train_num_steps = 0
 
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'validate')
+        self.val_loss_accum += loss.detach().cpu().item()
+        self.val_num_steps += 1
         return loss
+
+    def on_validation_epoch_end(self):
+        print("epoch val loss: ", self.val_loss_accum/self.val_num_steps)
+        self.val_loss_accum = 0
+        self.val_num_steps = 0
 
     def test_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'test')

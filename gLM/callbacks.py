@@ -90,51 +90,6 @@ def log_classification_metrics(
     return log_dict
 
 class OutputLoggingCallback(Callback):
-    def __init__(self, log_every_n_steps=20):
-        self.log_every_n_steps = log_every_n_steps
-        self.last_logged_step = 0
-
-    def on_epoch_end(self, trainer, pl_module, split):
-        # Create a table with protein IDs, true labels, and predicted labels
-        protein_ids = pl_module.step_outputs[split]['concat_id']
-        true_labels = pl_module.step_outputs[split]['label']
-        predicted_labels = np.atleast_1d(pl_module.step_outputs[split]['predicted_label'].squeeze().to("cpu").numpy())
-        predictions = np.atleast_1d(pl_module.step_outputs[split]['predictions'].squeeze().to("cpu").numpy())
-
-        table_data = []
-        for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
-            table_data.append([pid, true, pred_lab, pred])
-
-        table = wandb.Table(data=table_data, columns=["Complex ID", "True label", "Predicted label", "Prediction"])
-        trainer.logger.experiment.log({f"{split}_epoch_end": table})
-
-    def on_fit_start(self, trainer, pl_module):
-        # Initialize step_outputs in the pl_module if it doesn't exist
-        if not hasattr(pl_module, "step_outputs"):
-            pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
-
-    def on_test_start(self, trainer, pl_module):
-        # Initialize step_outputs in the pl_module if it doesn't exist
-        if not hasattr(pl_module, "step_outputs"):
-            pl_module.step_outputs = defaultdict(lambda: defaultdict(list))
-            
-    def on_train_epoch_start(self, trainer, pl_module):
-        pl_module.step_outputs["train"].clear()
-
-    def on_validation_epoch_start(self, trainer, pl_module):
-        pl_module.step_outputs["validate"].clear()
-
-    def on_validation_epoch_end(self, trainer, pl_module):
-        self.on_epoch_end(trainer, pl_module, 'validate')
-
-    def on_test_epoch_start(self, trainer, pl_module):
-        pl_module.step_outputs["test"].clear()
-
-    def on_test_epoch_end(self, trainer, pl_module):
-        self.on_epoch_end(trainer, pl_module, 'test')
-
-
-class LogClassificationMetrics(Callback):
     def __init__(
         self,
         class_names: list,
@@ -150,6 +105,7 @@ class LogClassificationMetrics(Callback):
             "class_proportions",
             "classification_report",
         ],
+        log_every_n_steps = 20
     ):
         self.num_classes = len(class_names)
         self.class_names = class_names
@@ -164,14 +120,16 @@ class LogClassificationMetrics(Callback):
                 self.num_classes == 2
             ), "make_correct_dim only works for binary classification"
         self.metrics_to_plot = metrics_to_plot
+        self.log_every_n_steps = log_every_n_steps
+        self.last_logged_step = 0
 
     def log_metrics(self, trainer, pl_module, split):
-        y_pred = torch.cat([pl_module.step_outputs[split][self.y_pred_key]], dim=0)
-        y_pred_lab = torch.cat([pl_module.step_outputs[split][self.y_pred_lab_key]], dim=0)
+        y_pred = pl_module.epoch_outputs[split][self.y_pred_key]
+        y_pred_lab = pl_module.epoch_outputs[split][self.y_pred_lab_key]
         if(len(y_pred.shape) == 3 and (y_pred.shape[1] == 1 and y_pred.shape[2] == 1)):
             y_pred = torch.squeeze(y_pred, dim=[1, 2])
             y_pred_lab = torch.squeeze(y_pred_lab, dim=[1, 2])
-        y_true_lab = torch.cat([pl_module.step_outputs[split][self.y_true_lab_key]], dim=0)
+        y_true_lab = pl_module.epoch_outputs[split][self.y_true_lab_key]
 
         log_dict = log_classification_metrics(
             y_pred_lab,
@@ -182,17 +140,53 @@ class LogClassificationMetrics(Callback):
             class_names=self.class_names,
             metrics_to_plot=self.metrics_to_plot,
         )
-        
+
         trainer.logger.experiment.log(log_dict)
-        
+
+    def on_epoch_end(self, trainer, pl_module, split):
+        # Create a table with protein IDs, true labels, and predicted labels
+        pl_module.epoch_outputs[split]['label'] = torch.stack(pl_module.epoch_outputs[split]['label'])
+        pl_module.epoch_outputs[split]['predicted_label'] = torch.stack(pl_module.epoch_outputs[split]['predicted_label'])
+        pl_module.epoch_outputs[split]['predictions'] = torch.stack(pl_module.epoch_outputs[split]['predictions'])
+
+        if(split != 'train'):
+            protein_ids = pl_module.epoch_outputs[split]['concat_id']
+            true_labels = pl_module.epoch_outputs[split]['label']
+            predicted_labels = np.atleast_1d(pl_module.epoch_outputs[split]['predicted_label'].squeeze().to("cpu").numpy())
+            predictions = np.atleast_1d(pl_module.epoch_outputs[split]['predictions'].squeeze().to("cpu").numpy())
+
+            table_data = []
+            for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
+                table_data.append([pid, true, pred_lab, pred])
+
+            table = wandb.Table(data=table_data, columns=["Complex ID", "True label", "Predicted label", "Prediction"])
+            trainer.logger.experiment.log({f"{split}_epoch_end": table})
+
+    def reset_outputs(self, pl_module, split):
+        pl_module.epoch_outputs[split]['concat_id'].clear()
+        pl_module.epoch_outputs[split]['label'] = []
+        pl_module.epoch_outputs[split]['predicted_label'] = []
+        pl_module.epoch_outputs[split]['predictions'] = []
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        self.reset_outputs(pl_module, "train")
+
     def on_train_epoch_end(self, trainer, pl_module):
+        self.on_epoch_end(trainer, pl_module, 'train')
         self.log_metrics(trainer, pl_module, "train")
 
+    def on_validation_epoch_start(self, trainer, pl_module):
+        self.reset_outputs(pl_module, "validate")
+
     def on_validation_epoch_end(self, trainer, pl_module):
+        self.on_epoch_end(trainer, pl_module, 'validate')
         self.log_metrics(trainer, pl_module, "validate")
 
-    def on_test_epoch_end(self, trainer, pl_module):
-        self.log_metrics(trainer, pl_module, "test")
+    def on_test_epoch_start(self, trainer, pl_module):
+        self.reset_outputs(pl_module, "test")
 
+    def on_test_epoch_end(self, trainer, pl_module):
+        self.on_epoch_end(trainer, pl_module, 'test')
+        self.log_metrics(trainer, pl_module, "test")
 
 
