@@ -331,9 +331,9 @@ class CategoricalJacobianCNN(nn.Module):
         self.max_matrix_dim = 1026
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-        kernel_sizes = [3, 3, 3]
-        strides = [1, 1, 1]
-        out_channels = [128, 128, 128, 1]
+        kernel_sizes = [3]
+        strides = [1]
+        out_channels = [128, 1]
         
         last_dim = self.matrix_dim
         for i, k in enumerate(kernel_sizes):
@@ -343,12 +343,8 @@ class CategoricalJacobianCNN(nn.Module):
             torch.nn.InstanceNorm2d(1),
             torch.nn.Conv2d(1, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
             nn.LeakyReLU(0.01),
-            torch.nn.Conv2d(out_channels[0], out_channels[1], kernel_size=kernel_sizes[1], padding=0),
-            nn.LeakyReLU(0.01),
-            torch.nn.Conv2d(out_channels[1], out_channels[2], kernel_size=kernel_sizes[2], padding=0),
-            nn.LeakyReLU(0.01),
             torch.nn.Flatten(start_dim=1),
-            torch.nn.Linear(last_dim*last_dim*out_channels[2], out_channels[-1]),
+            torch.nn.Linear(last_dim*last_dim*out_channels[0], out_channels[-1]),
         )
         self.layers_2 = torch.nn.Sequential(
             torch.nn.Sigmoid()
