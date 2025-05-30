@@ -3,7 +3,7 @@ model:
     class_path: gLM_CNN.models.PredictorPPI
     init_args:
         logits_model: 
-            class_path: gLM_CNN.models.CategoricalJacobianURQGenerator
+            class_path: gLM_CNN.models.CategoricalJacobianGenerator
             init_args:
                 model_path: "./gLM2_650M/"
                 config_path: ""
@@ -12,19 +12,19 @@ model:
                 distance: cosine
                 sep_chains: true
                 n: 3
-                max_L: 513
+                max_L: 1026
         model:
-            class_path: gLM_CNN.models.CategoricalJacobianURQCNN
+            class_path: gLM_CNN.models.CategoricalJacobianCNN
             init_args:
-                matrix_dim: 513
+                matrix_dim: 1026
 data:
     class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
-        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species/sequences.fasta
-        data_folder: ./data/PINDER/eubacteria_5_1024_512_species/
+        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
+        data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         urq_folder: ./outputs/urqs/contact_maps/
-        tensor_dir: ./outputs/categorical_jacobians/glm2_cosine/
-        batch_size: 4096
+        tensor_dir: ./outputs/categorical_jacobians/glm2_cosine_post250521/
+        batch_size: 128
         positive_only: false
         num_workers: 4
         num_samples: null
@@ -43,7 +43,7 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'CategoricalJacobianURQCNN'
+            name: 'CategoricalJacobianCNN'
             log_model: false
             prefix: 'gLM2'
     enable_checkpointing: true
@@ -78,10 +78,10 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/
+            dirpath: logs/CategoricalJacobianCNN/gLM2/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
             save_last: true
             save_top_k: 1
-ckpt_path: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/model-epoch=17.ckpt 
+ckpt_path: logs/CategoricalJacobianCNN/gLM2/checkpoints/optimized/model-epoch=1.ckpt 

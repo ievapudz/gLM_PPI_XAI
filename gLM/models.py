@@ -20,11 +20,12 @@ TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, model_path: str, config_path: str, fast: bool, 
-        matrix_path: str, distance: str, sep_chains=False):
+        matrix_path: str, distance: str, sep_chains=False, n=3):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.n = n
 
         # TODO: improve this determination
         if("gLM2" in model_path):
@@ -48,7 +49,6 @@ class CategoricalJacobian(nn.Module):
         similarity = (torch.clamp(similarity, -1.0, 1.0)+1)/2
         dissimilarity = torch.ones_like(similarity) - similarity
         dissimilarity = dissimilarity.squeeze()
-
         return dissimilarity
 
     def get_cosine_contacts(self, fx_h, fx, masks):
@@ -59,7 +59,7 @@ class CategoricalJacobian(nn.Module):
 
         # Symmetrisation
         contacts = (jac+jac.T)/2
-        
+
         contacts = contacts.numpy()
         
         # Removal of diagonal values
@@ -164,7 +164,7 @@ class CategoricalJacobian(nn.Module):
         quadrant_size = upper_right_quadrant.shape[0]*upper_right_quadrant.shape[1]
 
         # Detect outliers
-        ppi = self.outlier_count(array, upper_right_quadrant, n=3)/quadrant_size
+        ppi = self.outlier_count(array, upper_right_quadrant, n=self.n)/quadrant_size
         if(quadrant_size == 0): ppi = 0
 
         # Just a placeholder for the counting stage
@@ -194,7 +194,6 @@ class CategoricalJacobian(nn.Module):
             else:
                 array_2d = self.get_matrix(s, x['length1'][i])
                 np.save(f"{self.matrix_path}/{x['concat_id'][i]}_{self.cj_type}CJ.npy", array_2d)
-
             # Detect the PPI signal in the CJ
             ppi_pred, ppi_lab = self.detect_ppi(array_2d, x['length1'][i])
             ppi_preds.append(ppi_pred) 
@@ -640,16 +639,34 @@ class gLM2(LightningModule):
         super().__init__()
         self.model = model
         self.save_hyperparameters()
-        self.loss_accum = 0
-        self.num_steps = 0
         self.configure_optimizers(self.model.parameters())
-     
+
+        self.train_loss_accum = 0
+        self.train_num_steps = 0
+        self.val_loss_accum = 0
+        self.val_num_steps = 0
+        self.epoch_outputs = {
+            'train': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            },
+            'validate': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            }, 
+            'test': {
+                'concat_id': [], 'label': [], 'predicted_label': [], 'predictions': []
+            }
+        }
+
     def step(self, batch, batch_idx, split):
         batch['predictions'], batch['predicted_label'] = self.model(batch, batch_idx, stage=split)
    
-        self.step_outputs[split] = batch
         loss = self.model.compute_loss(batch)
         self.log(f'{split}/loss', loss.detach().cpu().item(), on_step=True, on_epoch=True)
+
+        for key in self.epoch_outputs[split]:
+            if key in batch:
+                self.epoch_outputs[split][key].extend(batch[key])
+        
         return loss
 
     def configure_optimizers(self, params):
@@ -661,20 +678,26 @@ class gLM2(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'train')
-        self.loss_accum += loss.detach().cpu().item()
-        self.num_steps += 1
+        self.train_loss_accum += loss.detach().cpu().item()
+        self.train_num_steps += 1
         return loss
 
     def on_train_epoch_end(self):
-        self.scheduler.step(self.loss_accum / self.num_steps + 1)
-        self.loss_accum = 0
-        self.num_steps = 0
-        self.step_outputs["train"].clear()
-        self.step_outputs["validate"].clear()
+        self.scheduler.step(self.train_loss_accum / self.train_num_steps + 1)
+        print("epoch train loss: ", self.train_loss_accum/self.train_num_steps)
+        self.train_loss_accum = 0
+        self.train_num_steps = 0
 
     def validation_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'validate')
+        self.val_loss_accum += loss.detach().cpu().item()
+        self.val_num_steps += 1
         return loss
+
+    def on_validation_epoch_end(self):
+        print("epoch val loss: ", self.val_loss_accum/self.val_num_steps)
+        self.val_loss_accum = 0
+        self.val_num_steps = 0
 
     def test_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'test')

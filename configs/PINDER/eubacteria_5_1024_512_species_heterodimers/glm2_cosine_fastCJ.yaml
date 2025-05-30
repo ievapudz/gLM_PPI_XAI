@@ -8,17 +8,17 @@ model:
                 model_path: "./gLM2_650M/"
                 config_path: ""
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/glm2_cosine/
+                matrix_path: ./outputs/categorical_jacobians/glm2_cosine_post250521/
                 distance: "cosine"
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
         fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
         data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
-        batch_size: 4096
+        batch_size: 8192
         positive_only: false
         num_workers: 4
-        num_samples: null
+        num_samples: 1
         concat_type: "gLM2"
 optimizer:
     class_path: torch.optim.Adam

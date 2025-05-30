@@ -8,8 +8,9 @@ model:
                 model_path: "./esm2_t33_650M_UR50D/"
                 config_path: ""
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/esm2_cosine/
+                matrix_path: ./outputs/categorical_jacobians/esm2_cosine_post250521/
                 distance: "cosine"
+                n: 0.03125
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
@@ -42,9 +43,6 @@ trainer:
       - class_path: gLM.callbacks.SetupWandB 
       - class_path: gLM.callbacks.OutputLoggingCallback
         init_args:
-            log_every_n_steps: 1
-      - class_path: gLM.callbacks.LogClassificationMetrics
-        init_args:
           class_names:
           - 'Negative'
           - 'Positive'
@@ -62,6 +60,7 @@ trainer:
             - mcc
             - roc_auc
             - pr_auc
+          log_every_n_steps: 1
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
             dirpath: logs/PINDER/eubacteria_5_1024_512_species_heterodimers/checkpoints/optimized/

@@ -219,14 +219,27 @@ class LogitsTensorCNN(nn.Module):
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+        kernel_sizes = [3, 3, 3]
+        strides = [1, 1, 1]
+        out_channels = [256, 256, 256, 1]
+
+        last_dim = self.max_tensor_dim
+        for i, k in enumerate(kernel_sizes):
+            last_dim = int((last_dim - k)/strides[i] + 1)
+
         self.contact_l = torch.nn.Sequential(
-            torch.nn.Conv2d(self.num_in_channels, 1, kernel_size=5, stride=1, padding=0),
-            torch.nn.MaxPool2d(2, stride=2)
+            torch.nn.InstanceNorm2d(1),
+            torch.nn.Conv2d(self.num_in_channels, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
+            nn.LeakyReLU(0.01),
+            torch.nn.Conv2d(out_channels[0], out_channels[1], kernel_size=kernel_sizes[1], padding=0),
+            nn.LeakyReLU(0.01),
+            torch.nn.Conv2d(out_channels[1], out_channels[2], kernel_size=kernel_sizes[2], padding=0),
         )
-        
+
         self.ppi_l = torch.nn.Sequential(
-            torch.nn.Linear(512*512, 1),
-            torch.nn.Sigmoid()
+            nn.LeakyReLU(0.01),
+            torch.nn.Flatten(start_dim=1),
+            torch.nn.Linear(last_dim*last_dim*out_channels[-2], out_channels[-1]),
         )
 
     def get_input_pad(self, x):
@@ -245,15 +258,17 @@ class LogitsTensorCNN(nn.Module):
         x['input'] = x['input'].squeeze().to(self.device)
         contact_l_out = self.contact_l(x['input'])
         contact_predictor = torch.nn.Sigmoid()
-        #contact_pred = contact_predictor(contact_l_out).squeeze()
+        contact_pred = contact_predictor(contact_l_out).squeeze()
         contact_pred = contact_predictor(contact_l_out)
         ppi_pred = self.ppi_l(torch.flatten(contact_l_out, start_dim=1))
         labels = torch.round(ppi_pred).int()
         return ppi_pred, labels, contact_pred     
 
     def compute_loss(self, x):
+        loss = torch.nn.BCEWithLogitsLoss()
+
         x['predictions'] = x['predictions'].squeeze()
-        binary_ppi_loss = torch.nn.functional.binary_cross_entropy(
+        binary_ppi_loss = loss(
             x['predictions'].to(self.device).float(),
             x['label'].to(self.device).float()
         )
@@ -261,7 +276,7 @@ class LogitsTensorCNN(nn.Module):
             contact_loss = 0
         else:
             x['contact_pred'] = x['contact_pred'].squeeze()
-            contact_loss = torch.nn.functional.binary_cross_entropy(
+            contact_loss = loss(
                 x['contact_pred'].to(self.device).float(),
                 x['urq'].to(self.device).float()
             )
@@ -333,21 +348,24 @@ class CategoricalJacobianCNN(nn.Module):
 
         kernel_sizes = [3]
         strides = [1]
-        out_channels = [128, 1]
+        out_channels = [64, 2]
         
         last_dim = self.matrix_dim
         for i, k in enumerate(kernel_sizes):
             last_dim = int((last_dim - k)/strides[i] + 1)
+
+        print("Linear layer params: ", last_dim**2*out_channels[-2])
 
         self.layers = torch.nn.Sequential(
             torch.nn.InstanceNorm2d(1),
             torch.nn.Conv2d(1, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
             nn.LeakyReLU(0.01),
             torch.nn.Flatten(start_dim=1),
-            torch.nn.Linear(last_dim*last_dim*out_channels[0], out_channels[-1]),
+            torch.nn.Linear(last_dim*last_dim*out_channels[-2], out_channels[-1]),
+            torch.nn.Dropout(0.2)
         )
         self.layers_2 = torch.nn.Sequential(
-            torch.nn.Sigmoid()
+            torch.nn.Softmax()
         )
 
         # Initialisation of the weights
@@ -365,15 +383,17 @@ class CategoricalJacobianCNN(nn.Module):
         x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
 
         intermed = self.layers(x['input'])
-        ppi_pred = intermed
-        labels = torch.round(self.layers_2(intermed)).int()
+        ppi_pred = self.layers_2(intermed).select(dim=1, index=1)
+        
+        labels = torch.round(ppi_pred).int()
+
         labels = torch.squeeze(labels)
         return ppi_pred, labels, None
 
     def compute_loss(self, x):
         x['predictions'] = x['predictions'].squeeze()
 
-        loss = torch.nn.BCEWithLogitsLoss()
+        loss = torch.nn.BCELoss()
         binary_ppi_loss = loss(
             x['predictions'].to(self.device).float(),
             x['label'].to(self.device).float()

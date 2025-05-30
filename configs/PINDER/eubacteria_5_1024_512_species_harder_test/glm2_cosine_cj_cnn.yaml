@@ -7,7 +7,7 @@ model:
             init_args:
                 model_path: "./gLM2_650M/"
                 config_path: ""
-                cj_path: ./outputs/categorical_jacobians/glm2_cosine/
+                cj_path: ./outputs/categorical_jacobians/glm2_cosine_post250521/
                 cj_type: fast
                 distance: cosine
                 sep_chains: true
@@ -84,4 +84,4 @@ trainer:
             mode: min
             save_last: true
             save_top_k: 1
-ckpt_path: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/model-epoch=9.ckpt 
+ckpt_path: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/model-epoch=17.ckpt 

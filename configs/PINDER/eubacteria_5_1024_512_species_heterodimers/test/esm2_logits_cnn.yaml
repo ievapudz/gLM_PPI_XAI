@@ -3,39 +3,36 @@ model:
     class_path: gLM_CNN.models.PredictorPPI
     init_args:
         logits_model: 
-            class_path: gLM_CNN.models.CategoricalJacobianURQGenerator
+            class_path: gLM_CNN.models.LogitsTensorGenerator
             init_args:
-                model_path: "./gLM2_650M/"
+                model_path: "./esm2_t33_650M_UR50D/"
                 config_path: ""
-                cj_path: ./outputs/categorical_jacobians/glm2_cosine_post250521/
-                cj_type: fast
-                distance: cosine
-                sep_chains: true
-                n: 3
-                max_L: 513
+                fast: true
+                tensor_path: ./outputs/logits_tensors/esm2/
         model:
-            class_path: gLM_CNN.models.CategoricalJacobianURQCNN
+            class_path: gLM_CNN.models.LogitsTensorCNN
             init_args:
-                matrix_dim: 513
+                tensor_dim: 1027
+                num_in_channels: 50
 data:
     class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
-        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species/sequences.fasta
-        data_folder: ./data/PINDER/eubacteria_5_1024_512_species/
+        fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
+        data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         urq_folder: ./outputs/urqs/contact_maps/
-        tensor_dir: ./outputs/categorical_jacobians/glm2_cosine/
-        batch_size: 4096
+        tensor_dir: ./outputs/logits_tensors/esm2/
+        batch_size: 128
         positive_only: false
         num_workers: 4
         num_samples: null
-        concat_type: "gLM2"
+        concat_type: "pLM"
 optimizer:
     class_path: torch.optim.Adam
     init_args:
         lr: 0.001
         weight_decay: 0.0001
 trainer:
-    max_epochs: 100
+    max_epochs: 1000
     deterministic: true
     logger:
         class_path: pytorch_lightning.loggers.WandbLogger
@@ -43,20 +40,20 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'CategoricalJacobianURQCNN'
+            name: 'LogitsTensorsCNN'
             log_model: false
-            prefix: 'gLM2'
+            prefix: 'ESM2'
     enable_checkpointing: true
     callbacks:
-      - class_path: gLM.callbacks.SetupWandB
+      - class_path: gLM.callbacks.SetupWandB 
+      - class_path: gLM.callbacks.OutputLoggingCallback
+        init_args:
+            log_every_n_steps: 1
       - class_path: pytorch_lightning.callbacks.EarlyStopping
         init_args:
             patience: 5
             monitor: validate/loss
             mode: min
-      - class_path: gLM.callbacks.OutputLoggingCallback
-        init_args:
-            log_every_n_steps: 1
       - class_path: gLM.callbacks.LogClassificationMetrics
         init_args:
           class_names:
@@ -78,10 +75,10 @@ trainer:
             - pr_auc
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/
+            dirpath: logs/LogitsTensorsCNN/ESM2/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
             save_last: true
             save_top_k: 1
-ckpt_path: logs/CategoricalJacobianURQCNN/gLM2/checkpoints/optimized/model-epoch=17.ckpt 
+ckpt_path: logs/LogitsTensorsCNN/ESM2/checkpoints/optimized/model-epoch=92.ckpt
