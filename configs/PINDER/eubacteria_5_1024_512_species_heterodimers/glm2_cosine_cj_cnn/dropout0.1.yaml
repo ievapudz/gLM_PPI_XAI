@@ -36,9 +36,9 @@ data:
         batch_size: 16
         positive_only: false
         num_workers: 4
-        num_samples: 8
+        num_samples: null
         concat_type: "gLM2"
-        kfolds: 1
+        kfolds: 5
         kfold_idx: 0
         seed: 42
 optimizer:
