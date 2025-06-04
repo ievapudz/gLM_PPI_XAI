@@ -17,6 +17,7 @@ from gLM.LMs import gLM2 as BioLM_gLM2
 from gLM.LMs import ESM2
 from gLM.LMs import MINT
 from gLM.models import CategoricalJacobian
+import gc
 
 TOKENIZERS_PARALLELISM = False
 
@@ -339,34 +340,71 @@ class CategoricalJacobianURQCNN(nn.Module):
         return loss
 
 class CategoricalJacobianCNN(nn.Module):
-    def __init__(self, matrix_dim: int):
+    def __init__(self, matrix_dim: int, loss: str, 
+            kernel_sizes: list, strides: list, out_channels: list, 
+            num_linear_layers: int, dropout: float
+        ):
         super(CategoricalJacobianCNN, self).__init__()
         self.matrix_dim = matrix_dim
+        self.loss = loss
 
         self.max_matrix_dim = 1026
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+        """
         kernel_sizes = [3]
         strides = [1]
-        out_channels = [64, 2]
-        
+        out_channels = [128, 2]
+        """        
+
         last_dim = self.matrix_dim
         for i, k in enumerate(kernel_sizes):
             last_dim = int((last_dim - k)/strides[i] + 1)
 
-        print("Linear layer params: ", last_dim**2*out_channels[-2])
+        # Adding CNN layers
+        for i, ks in enumerate(kernel_sizes):
+            if(i):
+                self.layers.append(
+                    torch.nn.Conv2d(out_channels[i-1], out_channels[i], kernel_size=ks, padding=0)
+                )
+            else:
+                # At i == 0
+                self.layers.append(
+                    torch.nn.Conv2d(1, out_channels[i], kernel_size=ks, padding=0)
+                )
+            self.layers.append(nn.LeakyReLU(0.01))
+        
+        self.layers.append(torch.nn.Flatten(start_dim=1))
 
-        self.layers = torch.nn.Sequential(
-            torch.nn.InstanceNorm2d(1),
-            torch.nn.Conv2d(1, out_channels[0], kernel_size=kernel_sizes[0], padding=0),
-            nn.LeakyReLU(0.01),
-            torch.nn.Flatten(start_dim=1),
-            torch.nn.Linear(last_dim*last_dim*out_channels[-2], out_channels[-1]),
-            torch.nn.Dropout(0.2)
-        )
-        self.layers_2 = torch.nn.Sequential(
-            torch.nn.Softmax()
-        )
+        # Adding linear layers
+        for i in range(num_linear_layers):
+            if(i == len(linear_layer_sizes)-1):
+                self.layers.append(
+                    torch.nn.Linear(
+                        int(last_dim*last_dim*out_channels[-2]/2**(i)),
+                        out_channels[-1]
+                    )
+                )
+            else:
+                self.layers.append(
+                    torch.nn.Linear(
+                        int(last_dim*last_dim*out_channels[-2]/2**(i)),
+                        int(last_dim*last_dim*out_channels[-2]/2**(i+1))
+                    )
+                )
+
+        # Dropout
+        torch.nn.Dropout(dropout)
+                 
+        # Final activation function
+        if(self.loss == "BCE"):
+            self.layers_2 = torch.nn.Sequential(
+                torch.nn.Sigmoid()
+            )
+        elif(self.loss == "CE"):
+            self.layers_2 = torch.nn.Sequential(
+                torch.nn.Softmax(dim=1)
+            )
 
         # Initialisation of the weights
         for i, layer in enumerate(self.layers):
@@ -382,26 +420,37 @@ class CategoricalJacobianCNN(nn.Module):
     def forward(self, x, x_idx, stage):
         x['input'] = torch.unsqueeze(x['input'], dim=1).to(self.device)
 
-        intermed = self.layers(x['input'])
-        ppi_pred = self.layers_2(intermed).select(dim=1, index=1)
-        
-        labels = torch.round(ppi_pred).int()
-
+        if(self.loss == "BCE"):
+            ppi_pred = self.layers(x['input'])
+            labels = torch.round(self.layers_2(ppi_pred)).int()
+        elif(self.loss == "CE"):
+            ppi_pred = self.layers(x['input'])
+            ppi_pred = self.layers_2(ppi_pred)
+            labels = torch.round(ppi_pred[:,1])
+                
         labels = torch.squeeze(labels)
         return ppi_pred, labels, None
 
     def compute_loss(self, x):
         x['predictions'] = x['predictions'].squeeze()
 
-        loss = torch.nn.BCELoss()
-        binary_ppi_loss = loss(
-            x['predictions'].to(self.device).float(),
-            x['label'].to(self.device).float()
-        )
-
+        if(self.loss == "BCE"):
+            loss = torch.nn.BCEWithLogitsLoss()
+            binary_ppi_loss = loss(
+                x['predictions'].to(self.device).float(),
+                x['label'].to(self.device).float()
+            )
+        elif(self.loss == "CE"):
+            loss = torch.nn.CrossEntropyLoss()
+            binary_ppi_loss = loss(
+                x['predictions'].to(self.device),
+                x['label'].to(self.device)
+            )
+        
+            x['predictions'] = x['predictions'][:,1]
+        
         loss = binary_ppi_loss
         return loss
-
 
 class PredictorPPI(LightningModule):
     def __init__(self, logits_model: nn.Module, model: nn.Module):

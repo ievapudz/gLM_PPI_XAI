@@ -6,6 +6,7 @@ from data_process.EmbeddingsGenerator import EmbeddingsGenerator
 from pathlib import Path
 import os
 import torch
+from sklearn.model_selection import KFold
 
 class EmbeddingsDataset(Dataset):
     """
@@ -198,7 +199,10 @@ class SequencePairCJDataModule(LightningDataModule):
         positive_only: bool = False,
         num_workers: int = 1,
         num_samples: int = None,
-        concat_type: str = "gLM2"
+        concat_type: str = "gLM2",
+        kfolds: int = 1,
+        kfold_idx: int = 0,
+        seed: int = 42
     ):
         super().__init__()
         self.fasta_file = Path(fasta_file)
@@ -211,23 +215,40 @@ class SequencePairCJDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.num_samples = num_samples
         self.concat_type = concat_type
+        self.kfolds = kfolds
+        self.kfold_idx = kfold_idx
+        self.seed = seed
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = SequencePairDataset(
-                self.fasta_file,
-                self.train_file,
-                self.num_samples,
-                self.concat_type
-            )
-            self.val_dataset = SequencePairDataset(
-                self.fasta_file,
-                self.val_file,
-                self.num_samples,
-                self.concat_type
-            )
+            if(self.kfolds > 1):
+                full_dataset = SequencePairDataset(
+                    self.fasta_file,
+                    self.train_file,
+                    self.num_samples,
+                    self.concat_type
+                )
+                kf = KFold(n_splits=self.kfolds, shuffle=True, random_state=self.seed)
+                all_splits = [k for k in kf.split(full_dataset)]
+                train_indexes, val_indexes = all_splits[self.kfold_idx]
+                train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
+                self.train_dataset, self.val_dataset = full_dataset[train_indexes], dataset_full[val_indexes]
+
+            else:
+                self.train_dataset = SequencePairDataset(
+                    self.fasta_file,
+                    self.train_file,
+                    self.num_samples,
+                    self.concat_type
+                )
+                self.val_dataset = SequencePairDataset(
+                    self.fasta_file,
+                    self.val_file,
+                    self.num_samples,
+                    self.concat_type
+                )
 
         if stage == "test":
             self.test_dataset = SequencePairDataset(
