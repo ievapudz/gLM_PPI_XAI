@@ -93,7 +93,7 @@ def log_classification_metrics(
         )
    
     if(split == 'validate' and epoch_log_file):
-        performance = f"{trainer.epoch},{mcc:.5f},{pr_auc:.5f},{roc_auc:.5f},{precision:.5f},{recall:.5f},{tp},{fp},{fn},{tp}"
+        performance = f"{trainer.current_epoch},{mcc:.5f},{pr_auc:.5f},{roc_auc:.5f},{precision:.5f},{recall:.5f},{tp},{fp},{fn},{tp}"
         with open(epoch_log_file, 'a') as log_file_handle:
             log_file_handle.write(performance)
 
