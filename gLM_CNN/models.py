@@ -363,6 +363,18 @@ class CategoricalJacobianCNN(nn.Module):
 
         self.layers = torch.nn.Sequential()
 
+        # Final activation function
+        if(self.loss == "BCE"):
+            self.layers_2 = torch.nn.Sequential(
+                torch.nn.Sigmoid()
+            )
+            out_channels.append(1)
+        elif(self.loss == "CE"):
+            self.layers_2 = torch.nn.Sequential(
+                torch.nn.Softmax(dim=1)
+            )
+            out_channels.append(2)
+
         # Adding CNN layers
         for i, ks in enumerate(kernel_sizes):
             if(i):
@@ -398,16 +410,6 @@ class CategoricalJacobianCNN(nn.Module):
         # Dropout
         torch.nn.Dropout(dropout)
                  
-        # Final activation function
-        if(self.loss == "BCE"):
-            self.layers_2 = torch.nn.Sequential(
-                torch.nn.Sigmoid()
-            )
-        elif(self.loss == "CE"):
-            self.layers_2 = torch.nn.Sequential(
-                torch.nn.Softmax(dim=1)
-            )
-
         # Initialisation of the weights
         for i, layer in enumerate(self.layers):
             if isinstance(layer, torch.nn.Conv2d):
