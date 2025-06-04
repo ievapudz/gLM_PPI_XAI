@@ -54,7 +54,7 @@ trainer:
             save_dir: 'logs'
             offline: true
             project: gLM_PPI_XAI
-            name: 'CategoricalJacobianCNN-Dropout0.1'
+            name: 'CategoricalJacobianCNN-Sigmoid-CV-I'
             log_model: false
             prefix: 'gLM2'
     enable_checkpointing: true
@@ -85,10 +85,10 @@ trainer:
               - roc_auc
               - pr_auc
             log_every_n_steps: 1
-            metric_log_file: logs/CategoricalJacobianCNN-Dropout0.1/gLM2/5foldCV_0/metrics.csv
+            metric_log_file: logs/CategoricalJacobianCNN-Sigmoid-CV-I/gLM2/5foldCV_0_metrics.csv
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
-            dirpath: logs/CategoricalJacobianCNN-Dropout0.1/gLM2/checkpoints/optimized/
+            dirpath: logs/CategoricalJacobianCNN-Sigmoid-CV-I/gLM2/checkpoints/optimized/
             filename: model-{epoch}
             monitor: validate/loss
             mode: min
