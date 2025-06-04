@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 import os
 import torch.multiprocessing
+from sklearn.model_selection import KFold
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
