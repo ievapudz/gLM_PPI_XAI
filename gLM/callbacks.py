@@ -16,6 +16,19 @@ class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
         wandb.watch(pl_module.model, log="all", log_graph=True, log_freq=1)
 
+def compute_metrics(
+        y_pred,
+        y_pred_lab,
+        y_true_lab,
+    ):
+    mcc = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+    roc_auc = metrics.roc_auc_score(y_true_lab, y_pred)   
+    precision, recall, _ = precision_recall_curve(y_true_lab, y_pred)
+    pr_auc = auc(recall, precision)
+    cm = confusion_matrix(y_true_lab, y_pred_lab, labels=[0, 1])
+    tn, fp, fn, tp = cm.ravel() 
+    return (mcc, pr_auc, roc_auc, tn, fp, fn, tp)
+
 def log_classification_metrics(
     y_pred_lab,
     y_true_lab,
@@ -29,8 +42,7 @@ def log_classification_metrics(
     ),
     class_names=["Negative", "Positive"],
     y_pred=None,
-    split='train',
-    epoch_log_file=None
+    split='train'
 ):
     log_dict = {}
 
@@ -40,13 +52,7 @@ def log_classification_metrics(
 
     num_classes = len(class_names)
 
-    mcc = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
-    roc_auc = metrics.roc_auc_score(y_true_lab, y_pred)   
-    precision, recall, _ = precision_recall_curve(y_true_lab, y_pred)
-    pr_auc = auc(recall, precision)
-    cm = confusion_matrix(y_true_lab, y_pred_lab, labels=[0, 1])
-    tn, fp, fn, tp = cm.ravel() 
-
+    mcc, pr_auc, roc_auc, tn, fp, fn, tp = compute_metrics(y_pred, y_pred_lab, y_true_lab)
 
     if "mcc" in metrics_to_plot:
         log_dict[f"{prefix}_mcc"] = mcc
@@ -92,11 +98,6 @@ def log_classification_metrics(
             split_table=True,
         )
    
-    if(split == 'validate' and epoch_log_file):
-        performance = f"{trainer.current_epoch},{mcc:.5f},{pr_auc:.5f},{roc_auc:.5f},{precision:.5f},{recall:.5f},{tp},{fp},{fn},{tp}"
-        with open(epoch_log_file, 'a') as log_file_handle:
-            log_file_handle.write(performance)
-
     return log_dict
 
 class OutputLoggingCallback(Callback):
@@ -140,7 +141,7 @@ class OutputLoggingCallback(Callback):
             # Creating file and writing a header
             os.makedirs(os.path.dirname(self.metric_log_file), exist_ok=True)
             with open(self.metric_log_file, 'w') as log_file_handle:
-                log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tp,fp,fn,tp")
+                log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tp,fp,fn,tp\n")
 
     def log_metrics(self, trainer, pl_module, split):
         y_pred = pl_module.epoch_outputs[split][self.y_pred_key]
@@ -158,8 +159,7 @@ class OutputLoggingCallback(Callback):
             trainer=trainer,
             class_names=self.class_names,
             metrics_to_plot=self.metrics_to_plot,
-            split=split,
-            epoch_log_file=self.metric_log_file
+            split=split
         )
 
         trainer.logger.experiment.log(log_dict)
@@ -172,9 +172,14 @@ class OutputLoggingCallback(Callback):
 
         if(split != 'train'):
             protein_ids = pl_module.epoch_outputs[split]['concat_id']
-            true_labels = pl_module.epoch_outputs[split]['label']
+            true_labels = pl_module.epoch_outputs[split]['label'].to("cpu").numpy()
             predicted_labels = np.atleast_1d(pl_module.epoch_outputs[split]['predicted_label'].squeeze().to("cpu").numpy())
             predictions = np.atleast_1d(pl_module.epoch_outputs[split]['predictions'].squeeze().to("cpu").numpy())
+
+            mcc, pr_auc, roc_auc, tn, fp, fn, tp = compute_metrics(predictions, predicted_labels, true_labels)
+            performance = f"{trainer.current_epoch},{mcc:.5f},{pr_auc:.5f},{roc_auc:.5f},{tn},{fp},{fn},{tp}\n"
+            with open(self.metric_log_file, 'a') as log_file_handle:
+                log_file_handle.write(performance)
 
             table_data = []
             for pid, true, pred_lab, pred in zip(protein_ids, true_labels, predicted_labels, predictions):
