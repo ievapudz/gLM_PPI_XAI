@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 import wandb
+import os
 
 class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
@@ -137,6 +138,7 @@ class OutputLoggingCallback(Callback):
 
         if(self.metric_log_file):
             # Creating file and writing a header
+            os.makedirs(os.path.dirname(self.metric_log_file), exist_ok=True)
             with open(self.metric_log_file, 'w') as log_file_handle:
                 log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tp,fp,fn,tp")
 
