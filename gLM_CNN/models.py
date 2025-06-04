@@ -361,6 +361,8 @@ class CategoricalJacobianCNN(nn.Module):
         for i, k in enumerate(kernel_sizes):
             last_dim = int((last_dim - k)/strides[i] + 1)
 
+        self.layers = torch.nn.Sequential()
+
         # Adding CNN layers
         for i, ks in enumerate(kernel_sizes):
             if(i):
