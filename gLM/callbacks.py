@@ -28,7 +28,7 @@ def log_classification_metrics(
     ),
     class_names=["Negative", "Positive"],
     y_pred=None,
-    split='train'
+    split='train',
     epoch_log_file=None
 ):
     log_dict = {}
