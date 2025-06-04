@@ -1,5 +1,5 @@
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from data_process.Processor import Processor
 from pathlib import Path
 import torch
@@ -127,7 +127,8 @@ class URQDataModule(LightningDataModule):
                 all_splits = [k for k in kf.split(full_dataset)]
                 train_indexes, val_indexes = all_splits[self.kfold_idx]
                 train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
-                self.train_dataset, self.val_dataset = full_dataset[train_indexes], dataset_full[val_indexes]
+                self.train_dataset = Subset(full_dataset, train_indexes)
+                self.val_dataset = Subset(full_dataset, val_indexes)
 
             else:
                 self.train_dataset = URQDataset(
