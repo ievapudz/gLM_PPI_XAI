@@ -87,7 +87,10 @@ class URQDataModule(LightningDataModule):
         positive_only: bool = False,
         num_workers: int = 1,
         num_samples: int = None,
-        concat_type: str = "gLM2"
+        concat_type: str = "gLM2",
+        kfolds: int = 1,
+        kfold_idx: int = 0,
+        seed: int = 42
     ):
         super().__init__()
         self.fasta_file = Path(fasta_file)
@@ -101,6 +104,9 @@ class URQDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.num_samples = num_samples
         self.concat_type = concat_type
+        self.kfolds = kfolds
+        self.kfold_idx = kfold_idx
+        self.seed = seed
     
         self.tensor_dir = tensor_dir
 
@@ -108,20 +114,35 @@ class URQDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         if stage == "fit" or stage is None:
-            self.train_dataset = URQDataset(
-                self.train_file,
-                self.fasta_file,
-                self.urq_folder,
-                self.num_samples,
-                self.concat_type,
-            )
-            self.val_dataset = URQDataset(
-                self.val_file,
-                self.fasta_file,
-                self.urq_folder,
-                self.num_samples,
-                self.concat_type,
-            )
+            if(self.kfolds > 1):
+                full_dataset = URQDataset(
+                    self.train_file,
+                    self.fasta_file,
+                    self.urq_folder,
+                    self.num_samples,
+                    self.concat_type
+                )
+                kf = KFold(n_splits=self.kfolds, shuffle=True, random_state=self.seed)
+                all_splits = [k for k in kf.split(full_dataset)]
+                train_indexes, val_indexes = all_splits[self.kfold_idx]
+                train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
+                self.train_dataset, self.val_dataset = full_dataset[train_indexes], dataset_full[val_indexes]
+
+            else:
+                self.train_dataset = URQDataset(
+                    self.train_file,
+                    self.fasta_file,
+                    self.urq_folder,
+                    self.num_samples,
+                    self.concat_type,
+                )
+                self.val_dataset = URQDataset(
+                    self.val_file,
+                    self.fasta_file,
+                    self.urq_folder,
+                    self.num_samples,
+                    self.concat_type,
+                )
 
         if stage == "test":
             self.test_dataset = URQDataset(
