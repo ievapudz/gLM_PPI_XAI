@@ -380,7 +380,7 @@ class CategoricalJacobianCNN(nn.Module):
 
         # Adding linear layers
         for i in range(num_linear_layers):
-            if(i == len(linear_layer_sizes)-1):
+            if(i == num_linear_layers-1):
                 self.layers.append(
                     torch.nn.Linear(
                         int(last_dim*last_dim*out_channels[-2]/2**(i)),
