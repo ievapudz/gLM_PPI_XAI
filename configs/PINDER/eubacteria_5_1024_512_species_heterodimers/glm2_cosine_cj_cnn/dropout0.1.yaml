@@ -30,7 +30,7 @@ data:
     class_path: gLM_CNN.dataloader.URQDataModule
     init_args:
         fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
-        data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/5-fold_CV/
+        data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
         urq_folder: ./outputs/urqs/contact_maps/
         tensor_dir: ./outputs/categorical_jacobians/glm2_cosine_post250521/
         batch_size: 16
