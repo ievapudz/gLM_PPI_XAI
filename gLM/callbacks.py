@@ -29,6 +29,7 @@ def log_classification_metrics(
     class_names=["Negative", "Positive"],
     y_pred=None,
     split='train'
+    epoch_log_file=None
 ):
     log_dict = {}
 
@@ -38,24 +39,24 @@ def log_classification_metrics(
 
     num_classes = len(class_names)
 
+    mcc = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
+    roc_auc = metrics.roc_auc_score(y_true_lab, y_pred)   
+    precision, recall, _ = precision_recall_curve(y_true_lab, y_pred)
+    pr_auc = auc(recall, precision)
+    cm = confusion_matrix(y_true_lab, y_pred_lab, labels=[0, 1])
+    tn, fp, fn, tp = cm.ravel() 
+
+
     if "mcc" in metrics_to_plot:
-        mcc = metrics.matthews_corrcoef(y_true_lab, y_pred_lab)
         log_dict[f"{prefix}_mcc"] = mcc
-        print(f"{split} mcc: {mcc:.3f}")
 
     if "roc" in metrics_to_plot or "roc_auc" in metrics_to_plot:
-        log_dict[f"{prefix}_roc_auc"] = metrics.roc_auc_score(y_true_lab, y_pred)
+        log_dict[f"{prefix}_roc_auc"] = roc_auc
 
     if "pr_auc" in metrics_to_plot:
-        precision, recall, _ = precision_recall_curve(y_true_lab, y_pred)
-        pr_auc = auc(recall, precision)
-
         log_dict[f"{prefix}_pr_auc"] = pr_auc
 
     if "confusion_matrix" in metrics_to_plot:
-        cm = confusion_matrix(y_true_lab, y_pred_lab, labels=[0, 1])
-        tn, fp, fn, tp = cm.ravel()
- 
         # Create a labeled confusion matrix
         labeled_cm = np.array([['TN', tn], ['FP', fp], ['FN', fn], ['TP', tp]])
 
@@ -89,7 +90,12 @@ def log_classification_metrics(
             title=f"Class Proportions",
             split_table=True,
         )
-        
+   
+    if(split == 'validate' and epoch_log_file):
+        performance = f"{trainer.epoch},{mcc:.5f},{pr_auc:.5f},{roc_auc:.5f},{precision:.5f},{recall:.5f},{tp},{fp},{fn},{tp}"
+        with open(epoch_log_file, 'a') as log_file_handle:
+            log_file_handle.write(performance)
+
     return log_dict
 
 class OutputLoggingCallback(Callback):
@@ -108,7 +114,8 @@ class OutputLoggingCallback(Callback):
             "class_proportions",
             "classification_report",
         ],
-        log_every_n_steps = 20
+        log_every_n_steps = 20,
+        metric_log_file = ""
     ):
         self.num_classes = len(class_names)
         self.class_names = class_names
@@ -126,6 +133,13 @@ class OutputLoggingCallback(Callback):
         self.log_every_n_steps = log_every_n_steps
         self.last_logged_step = 0
 
+        self.metric_log_file = metric_log_file
+
+        if(self.metric_log_file):
+            # Creating file and writing a header
+            with open(self.metric_log_file, 'w') as log_file_handle:
+                log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tp,fp,fn,tp")
+
     def log_metrics(self, trainer, pl_module, split):
         y_pred = pl_module.epoch_outputs[split][self.y_pred_key]
         y_pred_lab = pl_module.epoch_outputs[split][self.y_pred_lab_key]
@@ -142,7 +156,8 @@ class OutputLoggingCallback(Callback):
             trainer=trainer,
             class_names=self.class_names,
             metrics_to_plot=self.metrics_to_plot,
-            split=split
+            split=split,
+            epoch_log_file=self.metric_log_file
         )
 
         trainer.logger.experiment.log(log_dict)

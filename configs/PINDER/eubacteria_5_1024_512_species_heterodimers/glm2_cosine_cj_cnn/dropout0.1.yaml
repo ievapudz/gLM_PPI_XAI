@@ -36,7 +36,7 @@ data:
         batch_size: 16
         positive_only: false
         num_workers: 4
-        num_samples: null
+        num_samples: 8
         concat_type: "gLM2"
         kfolds: 5
         kfold_idx: 0
@@ -85,6 +85,7 @@ trainer:
               - roc_auc
               - pr_auc
             log_every_n_steps: 1
+            metric_log_file: logs/CategoricalJacobianCNN-Dropout0.1/gLM2/5foldCV_0/metrics.csv
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
             dirpath: logs/CategoricalJacobianCNN-Dropout0.1/gLM2/checkpoints/optimized/
