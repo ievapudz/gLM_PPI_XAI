@@ -17,11 +17,11 @@ model:
       class_path: gLM_CNN.models.CategoricalJacobianCNN
       init_args:
         matrix_dim: 1026
-        loss: BCE
+        loss: CE
         kernel_sizes:
-        - 3
-        - 3
-        - 3
+        - 9
+        - 9
+        - 9
         strides:
         - 1
         - 1
@@ -45,7 +45,7 @@ data:
     num_samples: null
     concat_type: gLM2
     kfolds: 5
-    kfold_idx: 2
+    kfold_idx: 1
     seed: 42
 optimizer:
   class_path: torch.optim.Adam
@@ -58,10 +58,10 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      save_dir: logs/CategoricalJacobianCNN/Sigmoid_CV_I_02/gLM2/2/
+      save_dir: logs/CategoricalJacobianCNN/Softmax_CV_I_03/gLM2/1/
       offline: true
       project: gLM_PPI_XAI
-      name: CategoricalJacobianCNN/Sigmoid_CV_I_02
+      name: CategoricalJacobianCNN/Softmax_CV_I_03
       log_model: false
       prefix: gLM2
   enable_checkpointing: true
@@ -74,7 +74,7 @@ trainer:
       mode: min
   - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     init_args:
-      dirpath: logs/CategoricalJacobianCNN/Sigmoid_CV_I_02/gLM2/2/checkpoints/
+      dirpath: logs/CategoricalJacobianCNN/Softmax_CV_I_03/gLM2/1/checkpoints/
       filename: model-{epoch}
       monitor: validate/loss
       mode: min
@@ -100,4 +100,4 @@ trainer:
       - roc_auc
       - pr_auc
       log_every_n_steps: 1
-      metric_log_file: logs/CategoricalJacobianCNN/Sigmoid_CV_I_02/gLM2/2/metrics.csv
+      metric_log_file: logs/CategoricalJacobianCNN/Softmax_CV_I_03/gLM2/1/metrics.csv
