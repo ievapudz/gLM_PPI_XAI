@@ -351,12 +351,6 @@ class CategoricalJacobianCNN(nn.Module):
         self.max_matrix_dim = 1026
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-        """
-        kernel_sizes = [3]
-        strides = [1]
-        out_channels = [128, 2]
-        """        
-
         last_dim = self.matrix_dim
         for i, k in enumerate(kernel_sizes):
             last_dim = int((last_dim - k)/strides[i] + 1)
@@ -429,8 +423,7 @@ class CategoricalJacobianCNN(nn.Module):
             labels = torch.round(self.layers_2(ppi_pred)).int()
         elif(self.loss == "CE"):
             ppi_pred = self.layers(x['input'])
-            ppi_pred = self.layers_2(ppi_pred)
-            labels = torch.round(ppi_pred[:,1])
+            labels = torch.round(self.layers_2(ppi_pred)[:,1])
                 
         labels = torch.squeeze(labels)
         return ppi_pred, labels, None
