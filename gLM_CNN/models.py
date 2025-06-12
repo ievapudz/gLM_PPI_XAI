@@ -373,12 +373,12 @@ class CategoricalJacobianCNN(nn.Module):
         for i, ks in enumerate(kernel_sizes):
             if(i):
                 self.layers.append(
-                    torch.nn.Conv2d(out_channels[i-1], out_channels[i], kernel_size=ks, padding=0)
+                    torch.nn.Conv2d(out_channels[i-1], out_channels[i], kernel_size=ks, stride=strides[i], padding=0)
                 )
             else:
                 # At i == 0
                 self.layers.append(
-                    torch.nn.Conv2d(1, out_channels[i], kernel_size=ks, padding=0)
+                    torch.nn.Conv2d(1, out_channels[i], kernel_size=ks, stride=strides[i], padding=0)
                 )
             self.layers.append(nn.LeakyReLU(0.01))
         
