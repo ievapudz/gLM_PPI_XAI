@@ -58,10 +58,10 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      save_dir: logs/CategoricalJacobianCNN/Softmax_CV_I_04/gLM2/2/
+      save_dir: logs/CategoricalJacobianCNN/Softmax_CV_I_05/gLM2/2/
       offline: true
       project: gLM_PPI_XAI
-      name: CategoricalJacobianCNN/Softmax_CV_I_04
+      name: CategoricalJacobianCNN/Softmax_CV_I_05
       log_model: false
       prefix: gLM2
   enable_checkpointing: true
@@ -74,7 +74,7 @@ trainer:
       mode: min
   - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     init_args:
-      dirpath: logs/CategoricalJacobianCNN/Softmax_CV_I_04/gLM2/2/checkpoints/
+      dirpath: logs/CategoricalJacobianCNN/Softmax_CV_I_05/gLM2/2/checkpoints/
       filename: model-{epoch}
       monitor: validate/loss
       mode: min
@@ -100,4 +100,4 @@ trainer:
       - roc_auc
       - pr_auc
       log_every_n_steps: 1
-      metric_log_file: logs/CategoricalJacobianCNN/Softmax_CV_I_04/gLM2/2/metrics.csv
+      metric_log_file: logs/CategoricalJacobianCNN/Softmax_CV_I_05/gLM2/2/metrics.csv
