@@ -402,7 +402,7 @@ class CategoricalJacobianCNN(nn.Module):
                 )
 
         # Dropout
-        torch.nn.Dropout(dropout)
+        self.layers.append(torch.nn.Dropout(dropout))
                  
         # Initialisation of the weights
         for i, layer in enumerate(self.layers):
