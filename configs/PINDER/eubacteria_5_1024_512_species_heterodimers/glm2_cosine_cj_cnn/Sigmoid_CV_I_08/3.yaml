@@ -31,7 +31,7 @@ model:
         - 32
         - 16
         num_linear_layers: 1
-        dropout: 0.01
+        dropout: 0.2
 data:
   class_path: gLM_CNN.dataloader.URQDataModule
   init_args:

@@ -31,7 +31,7 @@ model:
         - 32
         - 16
         num_linear_layers: 1
-        dropout: 0.1
+        dropout: 0.01
 data:
   class_path: gLM_CNN.dataloader.URQDataModule
   init_args:
@@ -45,7 +45,7 @@ data:
     num_samples: null
     concat_type: gLM2
     kfolds: 5
-    kfold_idx: 4
+    kfold_idx: 0
     seed: 42
 optimizer:
   class_path: torch.optim.Adam
@@ -58,18 +58,23 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      save_dir: logs/CategoricalJacobianCNN/Softmax_CV_II_07/gLM2/4/
+      save_dir: logs/CategoricalJacobianCNN/Softmax_CV_I_09/gLM2/0/
       offline: true
       project: gLM_PPI_XAI
-      name: CategoricalJacobianCNN/Softmax_CV_II_07
+      name: CategoricalJacobianCNN/Softmax_CV_I_09
       log_model: false
       prefix: gLM2
   enable_checkpointing: true
   callbacks:
   - class_path: gLM.callbacks.SetupWandB
+  - class_path: pytorch_lightning.callbacks.EarlyStopping
+    init_args:
+      patience: 10
+      monitor: validate/loss
+      mode: min
   - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     init_args:
-      dirpath: logs/CategoricalJacobianCNN/Softmax_CV_II_07/gLM2/4/checkpoints/
+      dirpath: logs/CategoricalJacobianCNN/Softmax_CV_I_09/gLM2/0/checkpoints/
       filename: model-{epoch}
       monitor: validate/loss
       mode: min
@@ -95,4 +100,4 @@ trainer:
       - roc_auc
       - pr_auc
       log_every_n_steps: 1
-      metric_log_file: logs/CategoricalJacobianCNN/Softmax_CV_II_07/gLM2/4/metrics.csv
+      metric_log_file: logs/CategoricalJacobianCNN/Softmax_CV_I_09/gLM2/0/metrics.csv
