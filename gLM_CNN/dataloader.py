@@ -129,7 +129,6 @@ class URQDataModule(LightningDataModule):
                 train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
                 self.train_dataset = Subset(full_dataset, train_indexes)
                 self.val_dataset = Subset(full_dataset, val_indexes)
-
             else:
                 self.train_dataset = URQDataset(
                     self.train_file,
