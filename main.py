@@ -19,7 +19,7 @@ def main():
 	Run with python main.py test -c configs/config.yaml
 	"""
 	torch.set_float32_matmul_precision('medium')
-	cli = LightningCLI(save_config_kwargs={"overwrite": True})
+	cli = LightningCLI(save_config_kwargs={"overwrite": True, "save_to_log_dir": True})
 
 if __name__ == '__main__':
 	main()
