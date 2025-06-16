@@ -141,7 +141,7 @@ class OutputLoggingCallback(Callback):
             # Creating file and writing a header
             os.makedirs(os.path.dirname(self.metric_log_file), exist_ok=True)
             with open(self.metric_log_file, 'w') as log_file_handle:
-                log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tp,fp,fn,tp\n")
+                log_file_handle.write("epoch,mcc,pr_auc,roc_auc,precision,recall,tn,fp,fn,tp\n")
 
     def log_metrics(self, trainer, pl_module, split):
         y_pred = pl_module.epoch_outputs[split][self.y_pred_key]
