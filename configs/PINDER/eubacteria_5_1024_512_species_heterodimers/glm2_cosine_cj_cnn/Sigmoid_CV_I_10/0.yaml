@@ -59,7 +59,7 @@ trainer:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
       save_dir: logs/CategoricalJacobianCNN/Sigmoid_CV_I_10/gLM2/0/
-      offline: true
+      offline: false
       project: gLM_PPI_XAI
       name: CategoricalJacobianCNN/Sigmoid_CV_I_10
       log_model: false
