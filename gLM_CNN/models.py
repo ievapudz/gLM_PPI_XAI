@@ -487,7 +487,7 @@ class PredictorPPI(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, 'train')
-        self.log(f'{split}_step/loss', loss, on_step=True, on_epoch=False)
+        self.log(f'train_step/loss', loss)
         #self.train_loss_accum += loss.detach().cpu().item()
         #self.train_num_steps += 1
         return loss
