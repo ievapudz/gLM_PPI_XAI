@@ -499,7 +499,7 @@ class PredictorPPI(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         val_loss = self.step(batch, batch_idx, 'validate')
-        self.val_loss_accum += loss.detach().cpu().item()
+        self.val_loss_accum += val_loss.detach().cpu().item()
         self.val_num_steps += 1
         return val_loss
 
