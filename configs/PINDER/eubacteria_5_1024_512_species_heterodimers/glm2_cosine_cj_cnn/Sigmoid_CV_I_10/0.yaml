@@ -1,0 +1,103 @@
+seed_everything: 42
+model:
+  class_path: gLM_CNN.models.PredictorPPI
+  init_args:
+    logits_model:
+      class_path: gLM_CNN.models.CategoricalJacobianGenerator
+      init_args:
+        model_path: ./gLM2_650M/
+        config_path: ''
+        cj_path: ./outputs/categorical_jacobians/glm2_cosine_post250521/
+        cj_type: fast
+        distance: cosine
+        sep_chains: true
+        n: 3
+        max_L: 1026
+    model:
+      class_path: gLM_CNN.models.CategoricalJacobianCNN
+      init_args:
+        matrix_dim: 1026
+        loss: BCE
+        kernel_sizes:
+        - 3
+        - 9
+        - 9
+        strides:
+        - 1
+        - 5
+        - 5
+        out_channels:
+        - 1
+        - 1
+        - 1
+        num_linear_layers: 1
+        dropout: 0.0
+data:
+  class_path: gLM_CNN.dataloader.URQDataModule
+  init_args:
+    fasta_file: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/sequences.fasta
+    data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers/
+    urq_folder: ./outputs/urqs/contact_maps/
+    tensor_dir: ./outputs/categorical_jacobians/glm2_cosine_post250521/
+    batch_size: 8
+    positive_only: false
+    num_workers: 4
+    num_samples: null
+    concat_type: gLM2
+    kfolds: 5
+    kfold_idx: 0
+    seed: 42
+optimizer:
+  class_path: torch.optim.Adam
+  init_args:
+    lr: 0.0003
+trainer:
+  max_epochs: 200
+  deterministic: true
+  accumulate_grad_batches: 1
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      save_dir: logs/CategoricalJacobianCNN/Sigmoid_CV_I_10/gLM2/0/
+      offline: true
+      project: gLM_PPI_XAI
+      name: CategoricalJacobianCNN/Sigmoid_CV_I_10
+      log_model: false
+      prefix: gLM2
+  enable_checkpointing: true
+  callbacks:
+  - class_path: gLM.callbacks.SetupWandB
+  - class_path: pytorch_lightning.callbacks.EarlyStopping
+    init_args:
+      patience: 10
+      monitor: validate/loss
+      mode: min
+  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: logs/CategoricalJacobianCNN/Sigmoid_CV_I_10/gLM2/0/checkpoints/
+      filename: model-{epoch}
+      monitor: validate/loss
+      mode: min
+      save_last: true
+      save_top_k: 1
+  - class_path: gLM.callbacks.OutputLoggingCallback
+    init_args:
+      class_names:
+      - Negative
+      - Positive
+      y_pred_key: predictions
+      y_pred_lab_key: predicted_label
+      y_true_lab_key: label
+      make_one_hot: true
+      invert_probabilities: false
+      make_correct_dim: true
+      metrics_to_plot:
+      - confusion_matrix
+      - class_proportions
+      - calibration_curves
+      - classification_report
+      - mcc
+      - roc_auc
+      - pr_auc
+      log_every_n_steps: 1
+      metric_log_file: logs/CategoricalJacobianCNN/Sigmoid_CV_I_10/gLM2/0/metrics.csv
