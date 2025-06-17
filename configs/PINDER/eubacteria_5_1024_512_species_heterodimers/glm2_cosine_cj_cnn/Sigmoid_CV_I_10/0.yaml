@@ -65,5 +65,3 @@ trainer:
       log_model: false
       prefix: gLM2
   enable_checkpointing: true
-  callbacks:
-  - class_path: gLM.callbacks.SetupWandB
