@@ -14,7 +14,6 @@ import os
 
 class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
-        wandb.watch(pl_module.model, log="all", log_graph=True, log_freq=1)
         wandb.watch(pl_module.model, log="all", log_graph=True)
         wandb.define_metric("global_step", step_metric=None)
         wandb.define_metric("manual_train_loss_step", step_metric="global_step")
