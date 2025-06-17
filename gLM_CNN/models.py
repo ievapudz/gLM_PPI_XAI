@@ -479,7 +479,7 @@ class PredictorPPI(LightningModule):
    
         loss = self.model.compute_loss(batch)
         if wandb.run:
-            wand.log({f'manual_{split}_loss_step': loss.item(), 'global_step': self.global_step}) 
+            wandb.log({f'manual_{split}_loss_step': loss.item(), 'global_step': self.global_step}) 
 
         for key in self.epoch_outputs[split]:
             if key in batch:
