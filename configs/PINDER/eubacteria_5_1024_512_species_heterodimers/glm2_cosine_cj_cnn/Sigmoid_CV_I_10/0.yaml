@@ -67,16 +67,3 @@ trainer:
   enable_checkpointing: true
   callbacks:
   - class_path: gLM.callbacks.SetupWandB
-  - class_path: pytorch_lightning.callbacks.EarlyStopping
-    init_args:
-      patience: 5
-      monitor: validate/loss
-      mode: min
-  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-    init_args:
-      dirpath: logs/CategoricalJacobianCNN/Sigmoid_CV_I_10/gLM2/0/checkpoints/
-      filename: model-{epoch}
-      monitor: validate/loss
-      mode: min
-      save_last: true
-      save_top_k: 1
