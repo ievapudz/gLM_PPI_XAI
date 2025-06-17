@@ -489,6 +489,7 @@ class PredictorPPI(LightningModule):
         loss = self.step(batch, batch_idx, 'train')
         self.train_loss_accum += loss.detach().cpu().item()
         self.train_num_steps += 1
+        print(f"train step {self.global_step} logged loss: {loss.item()}")
         return loss
 
     def on_train_epoch_end(self):
@@ -500,6 +501,7 @@ class PredictorPPI(LightningModule):
         loss = self.step(batch, batch_idx, 'validate')
         self.val_loss_accum += loss.detach().cpu().item()
         self.val_num_steps += 1
+        print(f"val step {self.global_step} logged loss: {loss.item()}")
         return loss
 
     def on_validation_epoch_end(self):
