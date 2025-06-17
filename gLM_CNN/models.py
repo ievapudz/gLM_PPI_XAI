@@ -477,7 +477,7 @@ class PredictorPPI(LightningModule):
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         loss = self.model.compute_loss(batch)
-        #self.log(f'{split}_step/loss', loss, on_step=True, on_epoch=False)
+        self.log(f'{split}_step/loss', loss, batch_size=8, sync_dist=True)
 
         for key in self.epoch_outputs[split]:
             if key in batch:
@@ -487,7 +487,6 @@ class PredictorPPI(LightningModule):
 
     def training_step(self, batch, batch_idx):
         train_loss = self.step(batch, batch_idx, 'train')
-        self.log(f'train_step/loss', train_loss, on_step=True, on_epoch=False, sync_dist=True)
         #self.train_loss_accum += loss.detach().cpu().item()
         #self.train_num_steps += 1
         return train_loss
@@ -499,7 +498,6 @@ class PredictorPPI(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         val_loss = self.step(batch, batch_idx, 'validate')
-        self.log(f'validate_step/loss', val_loss, on_step=True, on_epoch=False, sync_dist=True)
         #self.val_loss_accum += loss.detach().cpu().item()
         #self.val_num_steps += 1
         return val_loss
