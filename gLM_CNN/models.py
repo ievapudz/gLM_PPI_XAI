@@ -477,7 +477,10 @@ class PredictorPPI(LightningModule):
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         loss = self.model.compute_loss(batch)
-        self.log(f'{split}_step/loss', loss, batch_size=8, sync_dist=True)
+        self.log(f'{split}_step/loss', loss, batch_size=8, 
+            on_step=True, on_epoch=False, prog_bar=True, 
+            logger=True, sync_dist=True
+        )
 
         for key in self.epoch_outputs[split]:
             if key in batch:
