@@ -492,7 +492,7 @@ class PredictorPPI(LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        print(f"epoch train loss: {self.train_loss_accum/self.train_num_steps:.3f}")
+        #print(f"epoch train loss: {self.train_loss_accum/self.train_num_steps:.3f}")
         self.train_loss_accum = 0
         self.train_num_steps = 0
 
@@ -503,7 +503,7 @@ class PredictorPPI(LightningModule):
         return loss
 
     def on_validation_epoch_end(self):
-        print(f"epoch val loss: {self.val_loss_accum/self.val_num_steps:.3f}")
+        #print(f"epoch val loss: {self.val_loss_accum/self.val_num_steps:.3f}")
         self.val_loss_accum = 0
         self.val_num_steps = 0
 
