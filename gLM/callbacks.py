@@ -12,11 +12,10 @@ from collections import defaultdict
 import wandb
 import os
 
-"""
 class SetupWandB(Callback):
     def on_train_start(self, trainer, pl_module):
         wandb.watch(pl_module.model, log="all", log_graph=True, log_freq=1)
-"""
+
 def compute_metrics(
         y_pred,
         y_pred_lab,
