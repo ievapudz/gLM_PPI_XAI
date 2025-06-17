@@ -41,8 +41,8 @@ data:
     tensor_dir: ./outputs/categorical_jacobians/glm2_cosine_post250521/
     batch_size: 8
     positive_only: false
-    num_workers: 4
-    num_samples: null
+    num_workers: 1
+    num_samples: 500
     concat_type: gLM2
     kfolds: 5
     kfold_idx: 0
