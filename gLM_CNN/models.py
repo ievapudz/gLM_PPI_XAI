@@ -477,7 +477,7 @@ class PredictorPPI(LightningModule):
         batch['predictions'], batch['predicted_label'], batch['contact_pred'] = self.model(batch, batch_idx, stage=split)
    
         loss = self.model.compute_loss(batch)
-        i#self.log(f'{split}_step/loss', loss, on_step=True, on_epoch=False)
+        #self.log(f'{split}_step/loss', loss, on_step=True, on_epoch=False)
 
         for key in self.epoch_outputs[split]:
             if key in batch:
@@ -492,7 +492,6 @@ class PredictorPPI(LightningModule):
         #self.train_num_steps += 1
         return loss
 
-    def on_train_epoch_end(self):
         #print(f"epoch train loss: {self.train_loss_accum/self.train_num_steps:.3f}")
         self.train_loss_accum = 0
         self.train_num_steps = 0
