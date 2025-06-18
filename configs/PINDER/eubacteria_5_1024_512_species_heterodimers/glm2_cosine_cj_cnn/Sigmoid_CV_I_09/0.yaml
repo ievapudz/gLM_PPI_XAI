@@ -65,17 +65,3 @@ trainer:
       log_model: false
       prefix: gLM2
   enable_checkpointing: true
-  callbacks:
-  - class_path: pytorch_lightning.callbacks.EarlyStopping
-    init_args:
-      patience: 10
-      monitor: validate/loss
-      mode: min
-  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-    init_args:
-      dirpath: logs/CategoricalJacobianCNN/Sigmoid_CV_I_09/gLM2/0/checkpoints/
-      filename: model-{epoch}
-      monitor: validate/loss
-      mode: min
-      save_last: true
-      save_top_k: 1
