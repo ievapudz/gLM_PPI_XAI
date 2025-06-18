@@ -57,7 +57,7 @@ def get_flanking_gene_info(gff_path, content, idx):
     else:
         return None
 
-def extract_genomic_region(fna_file, contig_id, start, end, strand, context=500):
+def extract_genomic_region(fna_file, contig_id, region_start, region_end, strand, goi_start=None, goi_end=None):
     records = SeqIO.to_dict(SeqIO.parse(fna_file, "fasta"))
     if contig_id not in records:
         raise ValueError(f"Contig {contig_id} not found in {fna_file}")
@@ -65,16 +65,25 @@ def extract_genomic_region(fna_file, contig_id, start, end, strand, context=500)
     seq_record = records[contig_id]
     seq_len = len(seq_record.seq)
 
-    # Adjust context
-    region_start = max(0, start - context - 1)
-    region_end = min(seq_len, end + context)
-    print(region_start, start, end, region_end)
+    # Retrieval of region in nts
+    whole_region_seq = seq_record.seq[region_start:region_end].lower()
 
-    region_seq = seq_record.seq[region_start:region_end].lower()
+    # Retrieval of flanking nt regions
+    upstream_region_seq = None
+    downstream_region_seq = None
+    if(goi_start):
+        upstream_region_seq = seq_record.seq[region_start:goi_start].lower()
+    if(goi_end):
+        downstream_region_seq = seq_record.seq[goi_end:region_end].lower()
+        
     if strand == '-':
-        region_seq = region_seq.reverse_complement()
+        whole_region_seq = whole_region_seq.reverse_complement()
 
-    return str(region_seq), region_start + 1, region_end  # adjust for 1-based coords
+    # TODO: combine the CDS regions in aa
+    # - Get aa sequences from JSON
+    # - Get absolute coordinates of each subregion to know where to slice the nt sequence
+
+    return str(whole_region_seq), str(upstream_region_seq), str(downstream_region_seq) 
 
 def main():
     # TODO: get assembly IDs of the product from JSON
@@ -108,8 +117,8 @@ def main():
         print(first_ufg_info)
         print(last_dfg_info)
 
-        # TODO: check the determination of the genomic coordinates
-        if(goi_info[3] == "+"):
+        # The determination of the genomic coordinates
+        if(goi_info[3] == "+" and first_ufg_info):
             start_region = goi_info[1] + first_ufg_info[4] - 1
             end_region = goi_info[1] + last_dfg_info[5] - 1
             print("Given coordinates: ", first_ufg_info[1], last_dfg_info[2])
@@ -119,6 +128,14 @@ def main():
             end_region = goi_info[2] - first_ufg_info[4] + 1
             print("Given coordinates: ", last_dfg_info[1], first_ufg_info[2])
             print("Computed coordinates: ", start_region, end_region)
+
+        if(first_ufg_info and last_dfg_info):
+            # Now retrieval of the region in nts
+            whole_seq, u_seq, d_seq = extract_genomic_region(fna_path, goi_info[0], start_region, end_region, goi_info[3], goi_start=goi_info[1], goi_end=goi_info[2])
+            
+            print(len(whole_seq), end_region-start_region, len(whole_seq)-len(u_seq)-len(d_seq), goi_info[2]-goi_info[1])
+
+        # TODO: save sequences with the headers that denote the token idx that ends the upstream genomic context and starts the downstream genomic context. It is needed for further processing of the sequences
         
         """
         contig_id, start, end, strand = goi_info
