@@ -79,24 +79,3 @@ trainer:
       mode: min
       save_last: true
       save_top_k: 1
-  - class_path: gLM.callbacks.OutputLoggingCallback
-    init_args:
-      class_names:
-      - Negative
-      - Positive
-      y_pred_key: predictions
-      y_pred_lab_key: predicted_label
-      y_true_lab_key: label
-      make_one_hot: true
-      invert_probabilities: false
-      make_correct_dim: true
-      metrics_to_plot:
-      - confusion_matrix
-      - class_proportions
-      - calibration_curves
-      - classification_report
-      - mcc
-      - roc_auc
-      - pr_auc
-      log_every_n_steps: 1
-      metric_log_file: logs/CategoricalJacobianCNN/Sigmoid_CV_I_09/gLM2/0/metrics.csv
