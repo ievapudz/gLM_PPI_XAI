@@ -75,8 +75,13 @@ def extract_genomic_region(fna_file, contig_id, region_start, region_end, strand
         
     if strand == '-':
         whole_region_seq = whole_region_seq.reverse_complement()
+        upstream_region_seq = upstream_region_seq.reverse_complement()
+        downstream_region_seq = downstream_region_seq.reverse_complement()
 
     return str(whole_region_seq), str(upstream_region_seq), str(downstream_region_seq) 
+
+def get_cds(content, goi_idx):
+    return content["flanking_genes"]["sequences"][goi_idx]
 
 def main():
     # TODO: get assembly IDs of the product from JSON
@@ -106,40 +111,23 @@ def main():
             print(f"Product {content['assembly_id'][0]} not found in {gff_path}")
             continue
 
-        print("***", content["assembly_id"][0], goi_info)
-        print(first_ufg_info)
-        print(last_dfg_info)
-
         # The determination of the genomic coordinates
         if(goi_info[3] == "+" and first_ufg_info):
             start_region = goi_info[1] + first_ufg_info[4] - 1
             end_region = goi_info[1] + last_dfg_info[5] - 1
-            print("Given coordinates: ", first_ufg_info[1], last_dfg_info[2])
-            print("Computed coordinates: ", start_region, end_region)
         elif(goi_info[3] == "-" and first_ufg_info):
             start_region = goi_info[2] - last_dfg_info[5] + 1
             end_region = goi_info[2] - first_ufg_info[4] + 1
-            print("Given coordinates: ", last_dfg_info[1], first_ufg_info[2])
-            print("Computed coordinates: ", start_region, end_region)
 
         if(first_ufg_info and last_dfg_info):
             # Now retrieval of the region in nts
             whole_seq, u_seq, d_seq = extract_genomic_region(fna_path, goi_info[0], start_region, end_region, goi_info[3], goi_start=goi_info[1], goi_end=goi_info[2])
+                        
+            goi_cds = get_cds(content, goi_idx)
+            print(f"{uniprot_id}\n<{first_ufg_info[3]}>{u_seq}<{goi_info[3]}>{goi_cds}<{last_dfg_info[3]}>{d_seq}")
             
-            print(len(whole_seq), end_region-start_region, len(whole_seq)-len(u_seq)-len(d_seq), goi_info[2]-goi_info[1])
-
         # TODO: save sequences with the headers that denote the token idx that ends the upstream genomic context and starts the downstream genomic context. It is needed for further processing of the sequences
-        
-        """
-        contig_id, start, end, strand = goi_info
-        try:
-            context_seq, region_start, region_end = extract_genomic_region(fna_path, contig_id, start, end, strand, context_size)
-        except ValueError as e:
-            print(e)
-            continue
 
-        print(assembly, product, context_seq)
-        """
         i += 1           
 
 if __name__ == "__main__":
