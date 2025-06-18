@@ -124,8 +124,8 @@ class URQDataModule(LightningDataModule):
                     self.concat_type
                 )
                 kf = StratifiedKFold(n_splits=self.kfolds, shuffle=True, random_state=self.seed)
-                all_splits = [k for k in kf.split(full_dataset, full_dataset['label'])]
-                train_indexes, val_indexes = all_splits[self.kfold_idx]
+                all_splits = [k for k in kf.split(full_dataset, full_dataset.get('label'))]
+                train_indexes, val_indexes = all_splits[self.kfold_idx])
                 train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
                 self.train_dataset = Subset(full_dataset, train_indexes)
                 self.val_dataset = Subset(full_dataset, val_indexes)
