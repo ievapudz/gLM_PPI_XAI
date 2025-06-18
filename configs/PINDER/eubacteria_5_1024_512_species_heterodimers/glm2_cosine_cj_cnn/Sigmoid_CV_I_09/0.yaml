@@ -52,9 +52,9 @@ optimizer:
   init_args:
     lr: 0.0003
 trainer:
-  max_epochs: 200
+  max_epochs: 20
   deterministic: true
-  accumulate_grad_batches: 2
+  accumulate_grad_batches: 1
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
