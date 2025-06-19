@@ -54,6 +54,47 @@ def pool(
         raise ValueError(f"pool_type {pool_type} not supported")
     return emb
 
+def init_model(model_name, devices, batch_size, max_seq_length, pool_type):
+    if "t5" in model_name:
+        model = ProtT5(
+            model_name=model_name,
+            layers="last",
+            devices=devices,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+            pool_type=pool_type
+        )
+    elif "progen" in model_name:
+        model = ProGen(
+            model_name=model_name,
+            layers="last",
+            devices=devices,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+            pool_type=pool_type
+        )
+    elif "esm" in model_name:
+        model = ESM(
+            model_name=model_name,
+            layers="last",
+            devices=devices,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+            pool_type=pool_type
+        )
+    elif "gLM2" in model_name:
+        model = gLM2(
+            model_name=model_name,
+            layers="last",
+            devices=devices,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+            pool_type=pool_type
+        )
+    else:
+        print("No model found")
+        return 1
+    return model
 
 logger = logging.getLogger(__name__)
 
