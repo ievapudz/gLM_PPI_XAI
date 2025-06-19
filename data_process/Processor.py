@@ -28,7 +28,7 @@ class Processor:
         else:
             pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
         if(self.concat_type == "gLM2"):
-            if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
+            if(aa_only): concat_seq = f"{fasta_dict[pair[0]]}<sep>{fasta_dict[pair[1]]}"
         elif(self.concat_type == "pLM"):
             concat_seq = f"{fasta_dict[pair[0]]}<eos>{fasta_dict[pair[1]]}"
         elif(self.concat_type == "mint"):
