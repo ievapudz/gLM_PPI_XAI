@@ -43,6 +43,7 @@ def pool(
         emb2 = last_hidden[len1[-1]:].sum(dim=0) / attention_mask[len1[-1]:].sum(dim=0)[..., None]
         emb1 = emb1.unsqueeze(0)
         emb2 = emb2.unsqueeze(0)
+        # DEBUG: this part causes some problems
         emb = torch.cat([emb1, emb2], -1)
     elif pool_type == "max":
         emb = last_hidden.max(dim=1)[0]
@@ -248,15 +249,13 @@ class BioSeqTransformer(ABC):
             if self.l2_norm:
                 embeds = F.normalize(embeds, p=2, dim=-1)
             encoded_embeds.append(embeds.cpu())
+
+        print(encoded_embeds)
             
         return torch.cat(encoded_embeds, dim=0)
 
     @torch.no_grad()
-    def encode_two(self, sequences1, sequences2, how="subtract", is_gLM2=False, **kwargs):
-        if(is_gLM2):
-            for i, seq in enumerate(sequences1):
-                sequences1[i] = "<+>"+sequences1[i]
-                sequences2[i] = "<+>"+sequences2[i]
+    def encode_two(self, sequences1, sequences2, how="subtract", **kwargs):
         encodings1 = self.encode(sequences1)
         encodings2 = self.encode(sequences2)
 
