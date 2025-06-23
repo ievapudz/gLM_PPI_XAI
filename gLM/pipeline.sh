@@ -4,10 +4,7 @@
 
 # Requirements: prepare the base.yaml file
 
-# TODO: take job name as input: the name of the set together with dev. subset
-#       dev. subset: CV or test
-
-JOB_NAME=$1
+JOB_PAR_NAME=$1 # parent job name
 DEV_SUBSET=$2
 DATA_PAR_DIR="./data/"
 CONFIGS_PAR_DIR="./configs/"
@@ -20,6 +17,21 @@ fi
 
 # TODO: generate config files for cross-validation of different models
 ls "${CONFIGS_PAR_DIR}/${JOB_NAME}/${DEV_SUBSET}"
+
+# All the jobs:
+# joint_pooling, separate_pooling, joint_input_separate_pooling
+# gLM2, ESM2, MINT
+
+for representation in "joint_pooling" "separate_pooling" "joint_input_separate_pooling"; do
+    for biolm in "gLM2" "ESM2" "MINT"; do
+        if [[ "$representation" == joint_input_separate_pooling && "$biolm" == MINT ]]; then
+            cp "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/separate_pooling/${biolm}/${DEV_SUBSET}" \
+               "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}"
+        else
+            bash ./gLM/make_cv_config.sh "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" ""
+        fi
+    done
+done
 
 # TODO: generate the representations needed for the model
 
