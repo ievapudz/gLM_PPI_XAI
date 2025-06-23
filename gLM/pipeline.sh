@@ -9,6 +9,8 @@
 
 JOB_NAME=$1
 DEV_SUBSET=$2
+DATA_PAR_DIR="./data/"
+CONFIGS_PAR_DIR="./configs/"
 
 if [[ "$DEV_SUBSET" == CV ]]; then
     echo "Running CV"
@@ -17,6 +19,7 @@ elif [[ "$DEV_SUBSET" == test ]]; then
 fi
 
 # TODO: generate config files for cross-validation of different models
+ls "${CONFIGS_PAR_DIR}/${JOB_NAME}/${DEV_SUBSET}"
 
 # TODO: generate the representations needed for the model
 
