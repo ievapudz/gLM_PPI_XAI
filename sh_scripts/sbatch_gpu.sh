@@ -26,7 +26,7 @@ module load CUDA/12.4.0
 export PATH=$HOME/mambaforge/bin:$PATH
 source activate gLM11
 
-git add gLM_CNN/models.py gLM_CNN/dataloader.py gLM/callbacks.py $CONFIG_FILE 
+git add gLM/models.py gLM/dataloader.py gLM/callbacks.py 
 git commit -m "$MESSAGE"
 
 srun python main.py fit -c $CONFIG_FILE

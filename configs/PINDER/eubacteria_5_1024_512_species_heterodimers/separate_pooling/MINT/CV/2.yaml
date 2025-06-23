@@ -11,14 +11,14 @@ data:
   class_path: gLM.dataloader.EmbeddingsDataModule
   init_args:
     data_folder: ./data/PINDER/eubacteria_5_1024_512_species_heterodimers
-    pt_folder: ./embeddings/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/gLM2_650M/
+    pt_folder: ./embeddings/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/mint/
     batch_size: 32
     positive_only: false
     num_workers: 4
     num_samples: null
-    concat_type: gLM2
+    concat_type: pLM
     kfolds: 5
-    kfold_idx: 0
+    kfold_idx: 2
     seed: 42
 optimizer:
   class_path: torch.optim.Adam
@@ -36,10 +36,10 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      save_dir: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/gLM2/0/
+      save_dir: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/MINT/2/
       offline: true
       project: gLM_PPI_XAI
-      name: PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/gLM2/0/
+      name: PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/MINT/2/
       log_model: false
       prefix: CV
   enable_checkpointing: true
@@ -51,7 +51,7 @@ trainer:
       mode: min
   - class_path: pytorch_lightning.callbacks.ModelCheckpoint
     init_args:
-      dirpath: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/gLM2/0/checkpoints/
+      dirpath: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/MINT/2/checkpoints/
       filename: model-{epoch}
       monitor: validate/loss
       mode: min
@@ -77,4 +77,4 @@ trainer:
       - roc_auc
       - pr_auc
       log_every_n_steps: 1
-      metric_log_file: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/gLM2/0/metrics.csv
+      metric_log_file: logs/gLM.models.PredictorPPI/PINDER/eubacteria_5_1024_512_species_heterodimers/separate_pooling/MINT/2/metrics.csv
