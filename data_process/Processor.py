@@ -31,8 +31,6 @@ class Processor:
             if(aa_only): concat_seq = f"{fasta_dict[pair[0]]}<sep>{fasta_dict[pair[1]]}"
         elif(self.concat_type == "pLM"):
             concat_seq = f"{fasta_dict[pair[0]]}<eos>{fasta_dict[pair[1]]}"
-        elif(self.concat_type == "mint"):
-            concat_seq = f"{fasta_dict[pair[0]]}--{fasta_dict[pair[1]]}"
         len1 = len(fasta_dict[pair[0]])
         len2 = len(fasta_dict[pair[1]])
         return (pair_id, concat_seq, len1, len2)
