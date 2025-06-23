@@ -2,7 +2,9 @@
 
 # Automated pipeline for cross-validation and testing of PPI models (all LMs)
 
-# Requirements: prepare the base.yaml file
+# Requirements: 
+#   - prepare the parent base.yaml file
+#   - generate all representations needed
 
 JOB_PAR_NAME=$1 # parent job name
 DEV_SUBSET=$2
@@ -15,25 +17,29 @@ elif [[ "$DEV_SUBSET" == test ]]; then
     echo "Running test"
 fi
 
-# TODO: generate config files for cross-validation of different models
-ls "${CONFIGS_PAR_DIR}/${JOB_NAME}/${DEV_SUBSET}"
-
-# All the jobs:
+# The grid jobs:
 # joint_pooling, separate_pooling, joint_input_separate_pooling
 # gLM2, ESM2, MINT
+
+declare -A biolm_model
+biolm_model["gLM2"]="gLM2_650M"
+biolm_model["ESM2"]="esm2_t33_650M_UR50D"
+biolm_model["MINT"]="mint"
 
 for representation in "joint_pooling" "separate_pooling" "joint_input_separate_pooling"; do
     for biolm in "gLM2" "ESM2" "MINT"; do
         if [[ "$representation" == joint_input_separate_pooling && "$biolm" == MINT ]]; then
-            cp "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/separate_pooling/${biolm}/${DEV_SUBSET}" \
-               "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}"
+            # Maybe just skip
+            echo "Skipping $representation for $biolm..."
         else
-            bash ./gLM/make_cv_config.sh "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" ""
+            # TODO: make the directory
+            sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/base.yaml" |\
+                sed "s|REPRESENTATION|${representation}|g" | sed "s|BIOLM_MODEL|${biolm_model["${biolm}"]}|g" |\
+                sed "s|BIOLM|${biolm}|g" | sed "s|prefix: 'CV'|prefix: ${DEV_SUBSET}|g"
+            #bash ./gLM/make_cv_config.sh "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" ""
         fi
     done
 done
-
-# TODO: generate the representations needed for the model
 
 # TODO: collect the results: plot the metrics, pick the best epoch of the model
 
