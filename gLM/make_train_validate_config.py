@@ -23,7 +23,7 @@ def remove_early_stopping(par_dir, dev_split="train_validate"):
             ]
     return content
 
-def get_max_epoch(par_dir, dev_split="CV", num_folds=5):
+def get_max_epochs(par_dir, dev_split="CV", num_folds=5):
     best_epochs = []
     for k in range(num_folds):
         fold_config = f"{par_dir}/{dev_split}/{k}.yaml"
@@ -44,10 +44,22 @@ def get_max_epoch(par_dir, dev_split="CV", num_folds=5):
     avg_epoch = sum(best_epochs)/num_folds
     max_epoch = int(avg_epoch) + bool(avg_epoch%1) 
     return max_epoch
-                
+
+def set_max_epochs(config, max_epoch):
+    config['trainer']['max_epochs'] = max_epoch
+    return config
+
+def write_config(config, par_dir, dev_split="train_validate"):
+    config_path = f"{par_dir}/{dev_split}/base.yaml"
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+    
 par_dir = sys.argv[1]
 num_folds = int(sys.argv[2])
 
 config = remove_early_stopping(par_dir)
-max_epoch = get_max_epoch(par_dir, num_folds=num_folds)
+max_epoch = get_max_epochs(par_dir, num_folds=num_folds)
+config = set_max_epochs(config, max_epoch)
+write_config(config, par_dir)
+
 

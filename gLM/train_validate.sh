@@ -43,8 +43,6 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
                 sed "s|0/checkpoints|"${DEV_SUBSET}"/checkpoints|g" | \
                 sed "s|kfolds: 5|kfolds: 0|" > "${CONFIGS_DIR}/base.yaml"
 
-            # TODO: have a python script to make following edits to the base.yaml
-            #   - set the max. epoch to the one chosen from CV
             python3 ./gLM/make_train_validate_config.py "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/" 5
 
             # Run the training and validation
