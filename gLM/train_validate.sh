@@ -47,7 +47,7 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
             #   - get the max. epoch from the logs paths in config. files
             #   - set the max. epoch to the one chosen from CV
             #   - remove early stopping
-            #python3 make_train_validate_config.py "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/CV/" 5
+            python3 ./gLM/make_train_validate_config.py "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/" 5
 
             # Run the training and validation
             #bash sh_scripts/sbatch_gpu.sh "${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" \
