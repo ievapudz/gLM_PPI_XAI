@@ -7,6 +7,7 @@ baseline_models/
 esm2_t33_650M_UR50D/
 mint/mint/model/mint.ckpt
 
+configs/**/*.yaml
 **/*.out
 **/__pycache__
 **/.ipynb_checkpoints/
