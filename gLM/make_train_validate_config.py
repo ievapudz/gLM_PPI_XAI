@@ -24,6 +24,7 @@ def remove_early_stopping(par_dir, dev_split="train_validate"):
     return content
 
 def get_max_epoch(par_dir, dev_split="CV", num_folds=5):
+    best_epochs = []
     for k in range(num_folds):
         fold_config = f"{par_dir}/{dev_split}/{k}.yaml"
         if not os.path.exists(fold_config):
@@ -38,11 +39,15 @@ def get_max_epoch(par_dir, dev_split="CV", num_folds=5):
             ckpt_path = glob(f"{checkpoints_path}/model-epoch=*.ckpt")
             match = re.search(r"model-epoch=(\d+)\.ckpt", os.path.basename(ckpt_path[0]))
             best_epoch = int(match.group(1))
-            print(ckpt_path, best_epoch)
+            best_epochs.append(best_epoch)
+    
+    avg_epoch = sum(best_epochs)/num_folds
+    max_epoch = int(avg_epoch) + bool(avg_epoch%1) 
+    return max_epoch
                 
 par_dir = sys.argv[1]
 num_folds = int(sys.argv[2])
 
 config = remove_early_stopping(par_dir)
-get_max_epoch(par_dir, num_folds=num_folds)
+max_epoch = get_max_epoch(par_dir, num_folds=num_folds)
 
