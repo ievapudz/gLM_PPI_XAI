@@ -5,6 +5,8 @@
 import yaml
 import sys
 import os
+import re
+from glob import glob
 
 def remove_early_stopping(par_dir, dev_split="train_validate"):
     config = f"{par_dir}/{dev_split}/base.yaml"
@@ -27,8 +29,17 @@ def get_max_epoch(par_dir, dev_split="CV", num_folds=5):
         if not os.path.exists(fold_config):
             print(f"{fold_config} does not exist", sys.stderr)
             return 1
-        
 
+        with open(fold_config) as f:
+            content = yaml.safe_load(f)
+            checkpoints_path = [cb['init_args']['dirpath'] for cb in content['trainer']['callbacks'] 
+                if (isinstance(cb, dict) and cb.get('class_path') == 'pytorch_lightning.callbacks.ModelCheckpoint')
+            ][0]
+            ckpt_path = glob(f"{checkpoints_path}/model-epoch=*.ckpt")
+            match = re.search(r"model-epoch=(\d+)\.ckpt", os.path.basename(ckpt_path[0]))
+            best_epoch = int(match.group(1))
+            print(ckpt_path, best_epoch)
+                
 par_dir = sys.argv[1]
 num_folds = int(sys.argv[2])
 
