@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# Part of the automated pipeline to fully train the model after CV for PPI
-# prediction
+# Part of the automated pipeline to fully train and validate the model after CV 
+# for PPI prediction
 
 # Requirements:
 #   - prepare the parent base.yaml file
@@ -24,9 +24,6 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
             echo "Skipping $representation for $biolm..."
         else
 
-            # TODO: collect the results from CV: plot the metrics, pick the best epoch of the model
-            #       - if any metrics.csv is missing, print out a warning
-
             # Making directory and the specific job configuration file
             CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}/"
             mkdir -p "${CONFIGS_DIR}"
@@ -48,8 +45,8 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
                 -j "${JOB_PAR_NAME}" -r "${representation}" -b "${biolm}" -f 5 --hyperparam "batch_size"
             
             # Run the training and validation
-            #bash sh_scripts/sbatch_gpu.sh "${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" \
-            #    "${CONFIGS_DIR}"/base.yaml "" 5
+            bash sh_scripts/sbatch_gpu.sh "${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" \
+                "${CONFIGS_DIR}"/base.yaml "" 5
         fi
     done
 done
