@@ -11,6 +11,7 @@ JOB_PAR_NAME=$1 # parent job name
 DEV_SUBSET="train_validate"
 DATA_PAR_DIR="./data/"
 CONFIGS_PAR_DIR="./configs/"
+OUTPUT_PAR_DIR="./outputs/predictions/gLM.models.PredictorPPI/"
 
 declare -A biolm_model
 biolm_model["gLM2"]="gLM2_650M"
@@ -43,8 +44,9 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
                 sed "s|0/checkpoints|"${DEV_SUBSET}"/checkpoints|g" | \
                 sed "s|kfolds: 5|kfolds: 0|" > "${CONFIGS_DIR}/base.yaml"
 
-            python3 ./gLM/make_train_validate_config.py "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/" 5
-
+            python3 ./gLM/make_train_validate_config.py -c "${CONFIGS_PAR_DIR}" -o "${OUTPUT_PAR_DIR}"\
+                -j "${JOB_PAR_NAME}" -r "${representation}" -b "${biolm}" -f 5 --hyperparam "batch_size"
+            
             # Run the training and validation
             #bash sh_scripts/sbatch_gpu.sh "${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" \
             #    "${CONFIGS_DIR}"/base.yaml "" 5
