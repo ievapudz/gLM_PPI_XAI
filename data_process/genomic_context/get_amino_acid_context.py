@@ -20,7 +20,10 @@ parser.add_option("--pair-list", "-p", dest="pair_list",
 	default=None, help="path to the input list of complexes' ID pairs.")
 
 parser.add_option("--output-fasta", "-o", dest="output_fasta",
-    default=None, help="path to the output mixed-modality FASTA file.")
+    default=None, help="path to the output FASTA file.")
+
+parser.add_option("--output-pair-list", dest="output_pair_list",
+    default=None, help="path to the output pair list file.")
 
 parser.add_option("--context-size", "-c", dest="context_size",
     default=100, help="number of flanking genes to include.")
@@ -38,13 +41,14 @@ parser.add_option("--database", dest="database",
 # CONFIGURATION
 genomic_json = options.genomic_json
 output_fasta = options.output_fasta
+output_pair_list = options.output_pair_list
 context_size = int(options.context_size)  # num. genes before and after
 
 def read_pair_list(list_path):
     pairs = pd.read_csv(list_path, sep='\t', header=0)
     uniprot_id_pairs = []
     for i in range(len(pairs)):
-        uniprot_id_pairs.append((pairs.loc[i, 'protein1'].split('_')[-1], pairs.loc[i, 'protein2'].split('_')[-1]))
+        uniprot_id_pairs.append((pairs.loc[i, 'protein1'].split('_')[-1], pairs.loc[i, 'protein2'].split('_')[-1], pairs.loc[i, 'label']))
     return uniprot_id_pairs
 
 def extract_gene_info(gff_file, product_accession):
@@ -113,7 +117,6 @@ def main():
     with open(genomic_json, "r") as f:
         data = json.load(f)
 
-    # TODO: read the pair list and get their contexts simultaneously
     uniprot_id_pairs = read_pair_list(options.pair_list)
 
     both_in_json = 0
@@ -147,6 +150,11 @@ def main():
 
     with open(output_fasta, "w") as output_handle:
         SeqIO.write(fasta, output_handle, "fasta-2line")
+        
+    with open(output_pair_list, "w") as output_handle:
+        output_handle.write(f"protein1\tprotein2\tlabel\n")
+        for pair in uniprot_id_pairs:
+            output_handle.write(f"{pair[0]}\t{pair[1]}\t{pair[2]}\n")
 
 if __name__ == "__main__":
     main()
