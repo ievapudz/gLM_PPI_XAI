@@ -136,13 +136,12 @@ def main():
             mid_idx = int(len(content["flanking_genes"]["ncbi_codes"])/2)
             _, downstream_flanking_seqs = get_flanking_seqs(pair[1], content, mid_idx)
             prot2_seq = get_aa_sequence(content, mid_idx)
-            context_prot1_seq = get_contextualised_sequence(prot2_seq, 
+            context_prot2_seq = get_contextualised_sequence(prot2_seq, 
                 None, downstream_flanking_seqs
             )
 
-            # TODO: write FASTA manually!!!! Because SeqRecord omits tokens
-            fasta.append(SeqRecord(Seq(prot1_seq), id=pair[0], description=""))
-            fasta.append(SeqRecord(Seq(prot2_seq), id=pair[1], description=""))
+            fasta.append(SeqRecord(Seq(context_prot1_seq), id=pair[0], description=""))
+            fasta.append(SeqRecord(Seq(context_prot2_seq), id=pair[1], description=""))
             
     print("Pairs that have both uniprot_ids in json: ", both_in_json)
 
