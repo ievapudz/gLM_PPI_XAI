@@ -1,7 +1,7 @@
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset, Subset
 from Bio import SeqIO
-from data_process.Processor import Processor
+from data_process.Processor import Processor, GenomicProcessor
 from pathlib import Path
 import os
 import torch
@@ -324,4 +324,116 @@ class SequencePairCJDataModule(LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
         )
+
+class GenomicSequencePairDataset(Dataset):
+    """
+    torch Dataset for sequence pairs
+    """
+
+    def __init__(
+        self,
+        fasta_file,
+        data_file,
+        num_samples: int = None,
+        concat_type: str = "gLM2"
+    ):
+        self.processor = GenomicProcessor(fasta_file, data_file, concat_type)
+        self.data = self.processor.load_pair_list()
+
+        if num_samples is not None:
+            self.data = self.data.head(num_samples)
+
+        print(
+            "Num positive pairs:",
+            len(self.data[self.data["label"] == 1]),
+            "\nNum negative pairs:",
+            len(self.data[self.data["label"] == 0]),
+        )
+        self.fasta_file = fasta_file
+        self.fasta_dict = self.processor.load_fasta()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        """
+        item is a concatenated sequence of the pair
+        """
+        row = self.data.iloc[idx].to_dict()
+        pair_id, seq, len1, len2 = self.processor.process_pair(
+            [row['protein1'], row['protein2']], self.fasta_dict, aa_only=True)
+        row['concat_id'] = pair_id
+        row['sequence'] = seq
+        # When both <?> tokens are used
+        row['length1'] = len1+1
+        row['length2'] = len2+1
+        return row
+
+class GenomicSequencePairCJDataModule(SequencePairCJDataModule):
+    """
+    LightningDataModule for SequencePairDataset
+    """
+
+    def __init__(
+        self,
+        fasta_file,
+        data_folder,
+        batch_size: int,
+        positive_only: bool = False,
+        num_workers: int = 1,
+        num_samples: int = None,
+        concat_type: str = "gLM2",
+        kfolds: int = 1,
+        kfold_idx: int = 0,
+        seed: int = 42
+    ):
+        super().__init__(
+            fasta_file,
+            data_folder,
+            batch_size,
+            positive_only,
+            num_workers,
+            num_samples,
+            concat_type,
+            kfolds,
+            kfold_idx,
+            seed
+        )
+
+    def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            if(self.kfolds > 1):
+                full_dataset = GenomicSequencePairDataset(
+                    self.fasta_file,
+                    self.train_file,
+                    self.num_samples,
+                    self.concat_type
+                )
+                kf = KFold(n_splits=self.kfolds, shuffle=True, random_state=self.seed)
+                all_splits = [k for k in kf.split(full_dataset)]
+                train_indexes, val_indexes = all_splits[self.kfold_idx]
+                train_indexes, val_indexes = train_indexes.tolist(), val_indexes.tolist()
+                self.train_dataset, self.val_dataset = full_dataset[train_indexes], dataset_full[val_indexes]
+
+            else:
+                self.train_dataset = GenomicSequencePairDataset(
+                    self.fasta_file,
+                    self.train_file,
+                    self.num_samples,
+                    self.concat_type
+                )
+                self.val_dataset = GenomicSequencePairDataset(
+                    self.fasta_file,
+                    self.val_file,
+                    self.num_samples,
+                    self.concat_type
+                )
+
+        if stage == "test":
+            self.test_dataset = GenomicSequencePairDataset(
+                self.fasta_file,
+                self.test_file,
+                self.num_samples,
+                self.concat_type
+            )
 

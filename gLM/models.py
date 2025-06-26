@@ -20,12 +20,13 @@ TOKENIZERS_PARALLELISM = True
 
 class CategoricalJacobian(nn.Module):
     def __init__(self, model_path: str, config_path: str, fast: bool, 
-        matrix_path: str, distance: str, sep_chains=False, n=3):
+        matrix_path: str, distance: str, sep_chains=False, n=3, context=False):
         super().__init__()
         self.fast = fast
         self.cj_type = 'fast' if(self.fast) else 'full'
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.n = n
+        self.context = context
 
         # TODO: improve this determination
         if("gLM2" in model_path):
@@ -100,10 +101,18 @@ class CategoricalJacobian(nn.Module):
 
         return contacts
 
-    def get_contacts(self, sequence: str, length1: int):
+    def get_contacts(self, sequence: str, length1: int, length2=None):
         input_ids, tokens, seqlen, chain_mask = self.LM.get_tokenized(sequence)
         masks = self.LM.get_masks(input_ids, seqlen)
-        fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.cj_type)
+
+        context_idx = None
+        if(self.context):
+            indices_33 = (input_ids == 33).nonzero(as_tuple=True)[0]
+            start_idx, end_idx = indices_33[2], indices_33[4]
+            masks = masks[start_idx:end_idx]
+            context_idx = [start_idx, end_idx]
+
+        fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.cj_type, context_idx=context_idx)
         if(self.distance == "Euclidean"):
             contacts = self.get_euclidean_contacts(fx_h, fx, masks)
         elif(self.distance == "cosine"):

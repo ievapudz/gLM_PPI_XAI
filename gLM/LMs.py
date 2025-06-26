@@ -36,12 +36,18 @@ class BioLM(nn.Module):
         
         return input_ids, tokens, seqlen, None
 
-    def get_logits(self, input_ids, chain_mask=None, fast=True):
+
+    def get_logits(self, input_ids, chain_mask=None, fast=True, context_idx=None):
+
         input_ids = input_ids.unsqueeze(0).to(self.device)
 
         with torch.no_grad(), torch.amp.autocast('cuda', enabled=True):
             f = lambda x: self.model(x)[0][..., self.tokens["all"]].cpu().float()
             x = torch.clone(input_ids).to(self.device)
+            
+            if(context_idx):
+                x = x[:, context_idx[0]:context_idx[1]]
+
             ln = x.shape[1]
 
             fx = f(x)[0]

@@ -28,9 +28,25 @@ class Processor:
         else:
             pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
         if(self.concat_type == "gLM2"):
-            if(aa_only): concat_seq = f"{fasta_dict[pair[0]]}<sep>{fasta_dict[pair[1]]}"
+            if(aa_only): concat_seq = f"<+>{fasta_dict[pair[0]]}<+>{fasta_dict[pair[1]]}"
         elif(self.concat_type == "pLM"):
             concat_seq = f"{fasta_dict[pair[0]]}<eos>{fasta_dict[pair[1]]}"
         len1 = len(fasta_dict[pair[0]])
         len2 = len(fasta_dict[pair[1]])
         return (pair_id, concat_seq, len1, len2)
+
+class GenomicProcessor(Processor):
+    def __init__(self, fasta_path, pair_list_path, concat_type):
+        Processor.__init__(self, fasta_path, pair_list_path, concat_type)
+
+    def process_pair(self, pair, fasta_dict, aa_only=True, ready_pair_ids=False):
+        if(ready_pair_ids):
+            pair_id = pair
+            pair = pair.split('_')
+        else:
+            pair_id = f"{str(pair[0]).replace('_', '-')}_{str(pair[1]).replace('_', '-')}"
+
+        len1 = len(fasta_dict[pair[0]].split('<+>')[-1])
+        len2 = len(fasta_dict[pair[1]].split('<+>')[1])
+        return (pair_id, fasta_dict[pair[0]]+fasta_dict[pair[1]], len1, len2)
+
