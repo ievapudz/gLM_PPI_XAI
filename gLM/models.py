@@ -109,7 +109,12 @@ class CategoricalJacobian(nn.Module):
         if(self.context):
             indices_33 = (input_ids == 33).nonzero(as_tuple=True)[0]
             start_idx, end_idx = indices_33[2], indices_33[4]
-            masks = masks[start_idx:end_idx]
+            proc_masks = (masks[0][start_idx:end_idx, :, start_idx:end_idx, :],
+                          masks[1][:, :, start_idx:end_idx, :],
+                          masks[2][start_idx:end_idx, :, start_idx:end_idx, :],
+                          masks[3][:, :, start_idx:end_idx, :]
+                        )
+            masks = proc_masks
             context_idx = [start_idx, end_idx]
 
         fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.cj_type, context_idx=context_idx)
@@ -151,7 +156,7 @@ class CategoricalJacobian(nn.Module):
 
     def outlier_count(self, array, upper_right_quadrant, n=3):
         m = np.mean(array)
-        s = np.std(array)
+        s = np.std(array)?
         threshold = m+n*s
 
         count_above_threshold = np.sum(upper_right_quadrant > threshold)
