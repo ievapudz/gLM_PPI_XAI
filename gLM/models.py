@@ -156,7 +156,7 @@ class CategoricalJacobian(nn.Module):
 
     def outlier_count(self, array, upper_right_quadrant, n=3):
         m = np.mean(array)
-        s = np.std(array)?
+        s = np.std(array)
         threshold = m+n*s
 
         count_above_threshold = np.sum(upper_right_quadrant > threshold)

@@ -45,12 +45,15 @@ class BioLM(nn.Module):
             f = lambda x: self.model(x)[0][..., self.tokens["all"]].cpu().float()
             x = torch.clone(input_ids).to(self.device)
             
-            if(context_idx):
-                x = x[:, context_idx[0]:context_idx[1]]
-
             ln = x.shape[1]
 
             fx = f(x)[0]
+
+            if(context_idx):
+                x = x[:, context_idx[0]:context_idx[1]]
+                fx = fx[context_idx[0]:context_idx[1], :]
+                ln = x.shape[1]
+
             if fast:
                 fx_h = torch.zeros(
                     (ln, 1 , ln, self.num_tokens),
