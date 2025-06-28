@@ -19,8 +19,11 @@ parser.add_option("--genomic-json", "-g", dest="genomic_json",
 parser.add_option("--pair-list", "-p", dest="pair_list",
 	default=None, help="path to the input list of complexes' ID pairs.")
 
-parser.add_option("--output-fasta", "-o", dest="output_fasta",
-    default=None, help="path to the output FASTA file.")
+parser.add_option("--output-context-fasta", "-o", dest="output_context_fasta",
+    default=None, help="path to the output FASTA file with genomic context.")
+
+parser.add_option("--output-fasta", dest="output_fasta",
+    default=None, help="path to the output FASTA file with original sequences.")
 
 parser.add_option("--output-pair-list", dest="output_pair_list",
     default=None, help="path to the output pair list file.")
@@ -40,6 +43,7 @@ parser.add_option("--database", dest="database",
 
 # CONFIGURATION
 genomic_json = options.genomic_json
+output_context_fasta = options.output_context_fasta
 output_fasta = options.output_fasta
 output_pair_list = options.output_pair_list
 context_size = int(options.context_size)  # num. genes before and after
@@ -119,11 +123,11 @@ def main():
 
     uniprot_id_pairs = read_pair_list(options.pair_list)
 
-    both_in_json = 0
+    pairs_in_json = []
+    context_fasta = []
     fasta = []
     for pair in uniprot_id_pairs:
         if(pair[0] in data.keys() and pair[1] in data.keys()):
-            both_in_json += 1
 
             # Get upstream flanking seqs. of prot1
             content = data[pair[0]]
@@ -143,18 +147,24 @@ def main():
                 None, downstream_flanking_seqs
             )
 
-            fasta.append(SeqRecord(Seq(context_prot1_seq), id=pair[0], description=""))
-            fasta.append(SeqRecord(Seq(context_prot2_seq), id=pair[1], description=""))
+            context_fasta.append(SeqRecord(Seq(context_prot1_seq), id=pair[0]+"_L", description=""))
+            context_fasta.append(SeqRecord(Seq(context_prot2_seq), id=pair[1]+"_R", description=""))
+            fasta.append(SeqRecord(Seq(prot1_seq), id=pair[0]+"_L", description=""))
+            fasta.append(SeqRecord(Seq(prot2_seq), id=pair[1]+"_R", description=""))
+            pairs_in_json.append(pair)
             
-    print("Pairs that have both uniprot_ids in json: ", both_in_json)
+    print("Pairs that have both uniprot_ids in json: ", len(pairs_in_json))
+
+    with open(output_context_fasta, "w") as output_handle:
+        SeqIO.write(context_fasta, output_handle, "fasta-2line")
 
     with open(output_fasta, "w") as output_handle:
         SeqIO.write(fasta, output_handle, "fasta-2line")
         
     with open(output_pair_list, "w") as output_handle:
         output_handle.write(f"protein1\tprotein2\tlabel\n")
-        for pair in uniprot_id_pairs:
-            output_handle.write(f"{pair[0]}\t{pair[1]}\t{pair[2]}\n")
+        for pair in pairs_in_json:
+            output_handle.write(f"{pair[0]}_L\t{pair[1]}_R\t{pair[2]}\n")
 
 if __name__ == "__main__":
     main()
