@@ -9,7 +9,7 @@ cat << EOF | sbatch
 #!/bin/bash
 #SBATCH --job-name="$JOB_NAME"
 #SBATCH --output=logs/slurm/"$JOB_NAME".out
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --reservation=schwede
 

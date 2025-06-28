@@ -19,7 +19,7 @@ cat << EOF | sbatch
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu="$MEM"G
 #SBATCH --partition=a100
-#SBATCH --qos=gpu1week
+#SBATCH --qos=gpu1day
 #SBATCH --reservation=schwede
 
 module load CUDA/12.4.0
