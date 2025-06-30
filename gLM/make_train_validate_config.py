@@ -81,43 +81,48 @@ def set_max_epochs(config, max_epoch):
     config['trainer']['max_epochs'] = max_epoch
     return config
 
-def get_best_hyperparam(out_dir, hyperparam, representation, biolm, 
-    dev_split="CV", target_metric="mcc", top_n=2
-):
-    metrics_path = glob(f"{out_dir}/{hyperparam}_*/{dev_split}/metrics.csv")
-    
-    values = []
-    means = []
-    stderrs = []
-    
-    for m in metrics_path:
-        match = re.search(fr"{hyperparam}_(\d+)", m)
-        value = int(match.group(1))
-        values.append(value)
+def get_best_hyperparams(out_dir, hyperparams, representation, biolm, 
+                         dev_split="CV", target_metric="mcc"):
+    # Find all candidate folders
+    pattern = out_dir + "/" + "/".join([f"{h}_*" for h in hyperparams]) + f"/{dev_split}/metrics.csv"
+    metric_paths = glob(pattern)
 
-        # Determine the best hyperparam
-        csv_path = f"{out_dir}/{hyperparam}_{value}/{dev_split}/metrics.csv"
-        df = pd.read_csv(csv_path)
-        filtered = df[(df["representation"] == representation) & (df["biolm"] == biolm)]
+    if not metric_paths:
+        raise FileNotFoundError(f"No metric files found matching pattern: {pattern}")
+
+    results = []
+
+    for path in metric_paths:
+        match = [re.search(fr"{h}_([^/\\]+)", path) for h in hyperparams]
+        if any(m is None for m in match):
+            continue
+        values = [m.group(1) for m in match]
         
-        means.append(filtered[target_metric].mean())
-        stderrs.append(filtered[target_metric].std(ddof=1)/np.sqrt(filtered.shape[0]))
+        df = pd.read_csv(path)
+        filtered = df[(df["representation"] == representation) & (df["biolm"] == biolm)]
+        if filtered.empty:
+            continue
 
-    proc_means = [mean - stderrs[i] for i, mean in enumerate(means)]    
-    combined = list(zip(values, proc_means))    
-    sorted_combined = sorted(combined, key=lambda x: (-x[1]))
-    
-    # Unpack the sorted values
-    sorted_values, sorted_proc_means = zip(*sorted_combined)
-    
-    # Get the best hyperparam value
-    best_hyperparam = sorted_values[0]
+        mean = filtered[target_metric].mean()
+        stderr = filtered[target_metric].std(ddof=1) / np.sqrt(filtered.shape[0])
+        proc_mean = mean - stderr
+        
+        results.append((tuple(values), proc_mean))
 
-    return best_hyperparam
+    if not results:
+        raise ValueError(f"No results found for representation={representation}, biolm={biolm}")
+
+    # Sort by processed mean descending
+    results.sort(key=lambda x: -x[1])
+
+    best_values = results[0][0]
+    return dict(zip(hyperparams, best_values))
 
 def set_best_hyperparam(config, hyperparam, best_hyperparam_value):
     if(hyperparam == "batch_size"):
         config['data']['init_args'][hyperparam] = best_hyperparam_value
+    elif(hyperparam == "optimizer"):
+        config[hyperparam]['class_path'] = f"torch.optim.{best_hyperparam_value}"
     return config
 
 def write_config(config, par_dir, dev_split="train_validate"):
@@ -128,6 +133,7 @@ def write_config(config, par_dir, dev_split="train_validate"):
 par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/{options.biolm}/"
 out_dir = f"{options.output_dir_path}/{options.job_name}/"
 num_folds = int(options.num_folds)
+hyperparams = options.hyperparam.split(" ")
 
 config = read_base_config(par_dir)
 
@@ -135,13 +141,14 @@ if(options.hyperparam == "epoch"):
     config = remove_early_stopping(config)
     max_epoch = get_max_epochs(par_dir, num_folds=num_folds)
     config = set_max_epochs(config, max_epoch)
-elif(options.hyperparam == "batch_size"):
-    best_hyperparam = get_best_hyperparam(out_dir, options.hyperparam,
+else:
+    best_hyperparam = get_best_hyperparams(out_dir, hyperparams,
         options.representation, options.biolm, dev_split="CV"
     )
-    config = set_best_hyperparam(config, options.hyperparam, 
-        best_hyperparam_value=best_hyperparam
-    )
+    for hparam in hyperparams:
+        config = set_best_hyperparam(config, hparam, 
+            best_hyperparam_value=best_hyperparam[hparam]
+        )
     
 write_config(config, par_dir)
 
