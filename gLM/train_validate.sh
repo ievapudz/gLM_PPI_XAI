@@ -18,6 +18,16 @@ biolm_model["gLM2"]="gLM2_650M"
 biolm_model["ESM2"]="esm2_t33_650M_UR50D"
 biolm_model["MINT"]="mint"
 
+declare -A concat_type
+concat_type["gLM2"]="gLM2"
+concat_type["ESM2"]="pLM"
+concat_type["MINT"]="pLM"
+
+declare -A emb_dims
+emb_dims["joint_pooling"]="1280"
+emb_dims["separate_pooling"]="2560"
+emb_dims["joint_input_separate_pooling"]="2560"
+
 for representation in "joint_pooling" "separate_pooling" "joint_input_separate_pooling"; do
     for biolm in "gLM2" "ESM2" "MINT"; do
         if [[ "$representation" == joint_input_separate_pooling && "$biolm" == MINT ]]; then
@@ -41,12 +51,8 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
                 sed "s|0/checkpoints|"${DEV_SUBSET}"/checkpoints|g" | \
                 sed "s|kfolds: 5|kfolds: 0|" > "${CONFIGS_DIR}/base.yaml"
 
-            python3 ./gLM/make_train_validate_config.py -c "${CONFIGS_PAR_DIR}" -o "${OUTPUT_PAR_DIR}"\
-                -j "${JOB_PAR_NAME}" -r "${representation}" -b "${biolm}" -f 5 --hyperparam "batch_size"
-            
             # Run the training and validation
-            bash sh_scripts/sbatch_gpu.sh "${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}" \
-                "${CONFIGS_DIR}"/base.yaml "" 5
+            bash sh_scripts/sbatch_train_validate.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${representation} ${biolm} 5
         fi
     done
 done

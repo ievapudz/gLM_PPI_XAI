@@ -152,10 +152,14 @@ class Evaluator:
         plt.tight_layout()
         plt.savefig(f"{self.out_dir}/{metric}.svg", dpi=600)
 
-    def rename_logs(self):
-        os.rename(self.base_dir, 
-                  f"{self.base_dir}_{self.hyperparam}_{self.hyperparam_value}/"
-        )
+    def rename_logs(self, parent_dir):
+        for representation in self.representations:
+            new_logs_dir = f"{self.base_dir}/{parent_dir}/{self.hyperparam}_{self.hyperparam_value}/{representation}/"
+            if not os.path.exists(new_logs_dir):
+                os.makedirs(new_logs_dir)
+                os.rename(f"{self.base_dir}/{representation}/", 
+                          f"{new_logs_dir}"
+                )
     
     def run(self):
         mpl.rcParams['figure.dpi'] = 600
