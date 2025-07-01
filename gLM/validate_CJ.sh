@@ -40,7 +40,7 @@ representation="cosine_fast_categorical_jacobian"
 for n in 3 2 1 0.5 0.25 0.125 0.0625 0.03125; do
     for biolm in "gLM2" "ESM2" "MINT"; do
         # Making directory and the specific job configuration file
-        CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/n_${n}/${biolm}/${DEV_SUBSET}/"
+        CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/n_${n}/"
         mkdir -p "${CONFIGS_DIR}"
             
         sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/base.yaml" |\
@@ -50,10 +50,10 @@ for n in 3 2 1 0.5 0.25 0.125 0.0625 0.03125; do
             sed "s|DEV_SPLIT|${DEV_SUBSET}|" |\
             sed "s|REPRESENTATION|${representation}|g" | sed "s|BIOLM_MODEL|${biolm_model["${biolm}"]}|g" |\
             sed "s|BIOLM|${biolm}|g" | \
-            sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/base.yaml"
-        
-        bash sh_scripts/sbatch_validate_CJ.sh "${JOB_PAR_NAME}/${representation}/n_${n}/${biolm}/${DEV_SUBSET}" \
-            "${CONFIGS_DIR}"/base.yaml 10
+            sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/${biolm}.yaml"
+
+        bash gLM/sbatch_validate_CJ.sh "${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/n_${n}/${biolm}" \
+            "${CONFIGS_DIR}"/${biolm}.yaml 10
         
     done
 done
