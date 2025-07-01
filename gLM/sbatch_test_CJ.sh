@@ -12,9 +12,9 @@ mkdir -p logs/slurm
 # Use a heredoc to create the script
 cat << EOF | sbatch
 #!/bin/bash
-#SBATCH --job-name=gLM_${REPRESENTATION}_${BIOLM}_job
+#SBATCH --job-name=${JOB_PAR_NAME}/${REPRESENTATION}/${BIOLM}/test
 #SBATCH --nodes=1
-#SBATCH --output=logs/slurm/representations_${BIOLM}.out 
+#SBATCH --output=logs/slurm/${JOB_PAR_NAME}/${REPRESENTATION}/${BIOLM}/test.out 
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem="${MEM}"G
@@ -28,6 +28,6 @@ source activate gLM11
 srun python3 ./gLM/make_test_cj_config.py -c "${CONFIGS_PAR_DIR}" -o "${OUTPUT_PAR_DIR}" \
     -j "${JOB_PAR_NAME}" -r "${REPRESENTATION}" -b "${BIOLM}" --hyperparam "n"
 
-srun python main.py test -c ${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${REPRESENTATION}/${BIOLM}/test/base.yaml
+srun python main.py test -c ${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${REPRESENTATION}/test/${BIOLM}.yaml
 
 EOF

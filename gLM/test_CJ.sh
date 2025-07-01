@@ -38,21 +38,22 @@ matrix_path["MINT"]="./outputs/categorical_jacobians/mint_cosine/"
 
 representation="cosine_fast_categorical_jacobian"
 
-#for biolm in "gLM2" "ESM2" "MINT"; do
-for biolm in "MINT"; do
+for biolm in "gLM2" "ESM2" "MINT"; do
     # Making directory and the specific job configuration file
-    CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${biolm}/${DEV_SUBSET}/"
+    CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/"
     mkdir -p "${CONFIGS_DIR}"
     
-    sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/base.yaml" |\
+    sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" "${CONFIGS_DIR}/base.yaml" |\
         sed "s|model_path: MODEL_PATH|model_path: ${model_path["${biolm}"]}|" |\
         sed "s|matrix_path: MATRIX_PATH|matrix_path: ${matrix_path["${biolm}"]}|" |\
         sed "s|DEV_SPLIT|${DEV_SUBSET}|" |\
         sed "s|n_N_THRES||" |\
         sed "s|REPRESENTATION|${representation}|g" | sed "s|BIOLM_MODEL|${biolm_model["${biolm}"]}|g" |\
         sed "s|BIOLM|${biolm}|g" | \
-        sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/base.yaml"
-
+        sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/${biolm}.yaml"
+    
+    echo "Running ${CONFIGS_DIR}/${biolm}.yaml"
+    
     bash gLM/sbatch_test_CJ.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${representation} ${biolm} 10
 
 done

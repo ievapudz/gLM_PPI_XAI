@@ -10,6 +10,8 @@ from glob import glob
 from optparse import OptionParser
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 parser = OptionParser()
 
@@ -33,8 +35,8 @@ parser.add_option("--hyperparam", dest="hyperparam",
 
 (options, args) = parser.parse_args()
 
-def read_base_config(par_dir, dev_split="test"):
-    config = f"{par_dir}/{dev_split}/base.yaml"
+def read_base_config(par_dir, biolm, dev_split="test"):
+    config = f"{par_dir}/{dev_split}/{biolm}.yaml"
     
     if not os.path.exists(config):
         print(f"{config} does not exist", sys.stderr)
@@ -53,7 +55,7 @@ def get_best_hyperparams(
     plot: bool = True
 ):
     # Search for all relevant metric files
-    pattern = f"{base_path}/{param_name}_*/{biolm}/validate/metrics.csv"
+    pattern = f"{base_path}/validate/{param_name}_*/{biolm}/metrics.csv"
     csv_files = glob(pattern)
 
     if not csv_files:
@@ -94,6 +96,7 @@ def get_best_hyperparams(
 
     # TODO: adjust to save the plot
     if plot:
+        plt.rcParams['font.size'] = '16'
         plt.figure(figsize=(8, 5))
         sns.lineplot(
             data=result_df,
@@ -106,10 +109,11 @@ def get_best_hyperparams(
         plt.title(f"{metric.upper()} vs. {param_name} for {biolm}")
         plt.xlabel(param_name)
         plt.ylabel(metric)
+        plt.ylim((0, 1))
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+        plt.savefig(f"{base_path}/validate/{biolm}_{param_name}_tuning.png", dpi=200)
 
     return best_n, result_df
 
@@ -118,16 +122,16 @@ def set_best_hyperparam(config, hyperparam, best_hyperparam_value):
         config['model']['init_args']['model']['init_args'][hyperparam] = float(best_hyperparam_value)
     return config
 
-def write_config(config, par_dir, dev_split="test"):
-    config_path = f"{par_dir}/{dev_split}/base.yaml"
+def write_config(config, par_dir, biolm, dev_split="test"):
+    config_path = f"{par_dir}/{dev_split}/{biolm}.yaml"
     with open(config_path, 'w') as f:
         yaml.dump(config, f)
     
-par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/{options.biolm}"
+par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/"
 out_dir = f"{options.output_dir_path}/{options.job_name}/{options.representation}/"
 hyperparam = options.hyperparam
 
-config = read_base_config(par_dir)
+config = read_base_config(par_dir, options.biolm)
 
 best_hyperparam, df = get_best_hyperparams(
     base_path=out_dir,
@@ -141,6 +145,6 @@ config = set_best_hyperparam(config, hyperparam,
     best_hyperparam_value=best_hyperparam
 )
 
-write_config(config, par_dir)
+write_config(config, par_dir, options.biolm)
 
 
