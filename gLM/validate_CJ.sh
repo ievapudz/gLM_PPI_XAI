@@ -52,7 +52,7 @@ for n in 3 2 1 0.5 0.25 0.125 0.0625 0.03125; do
             sed "s|BIOLM|${biolm}|g" | \
             sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/base.yaml"
         
-        bash sh_scripts/sbatch_cpu_test.sh "${JOB_PAR_NAME}/${representation}/n_${n}/${biolm}/${DEV_SUBSET}" \
+        bash sh_scripts/sbatch_validate_CJ.sh "${JOB_PAR_NAME}/${representation}/n_${n}/${biolm}/${DEV_SUBSET}" \
             "${CONFIGS_DIR}"/base.yaml 10
         
     done

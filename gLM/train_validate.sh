@@ -52,7 +52,7 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
                 sed "s|kfolds: 5|kfolds: 0|" > "${CONFIGS_DIR}/base.yaml"
 
             # Run the training and validation
-            bash sh_scripts/sbatch_train_validate.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${representation} ${biolm} 5
+            bash gLM/sbatch_train_validate.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${representation} ${biolm} 5
         fi
     done
 done

@@ -33,8 +33,9 @@ parser.add_option("--hyperparam", dest="hyperparam",
 
 (options, args) = parser.parse_args()
 
-def read_base_config(par_dir, dev_split="validate"):
-    config = f"{par_dir}/base.yaml"
+def read_base_config(par_dir, dev_split="test"):
+    config = f"{par_dir}/{dev_split}/base.yaml"
+    
     if not os.path.exists(config):
         print(f"{config} does not exist", sys.stderr)
         return 1
@@ -91,6 +92,7 @@ def get_best_hyperparams(
     best_candidates = result_df[result_df[metric] == max_metric]
     best_n = best_candidates[param_name].max()
 
+    # TODO: adjust to save the plot
     if plot:
         plt.figure(figsize=(8, 5))
         sns.lineplot(
@@ -121,7 +123,7 @@ def write_config(config, par_dir, dev_split="test"):
     with open(config_path, 'w') as f:
         yaml.dump(config, f)
     
-par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/"
+par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/{options.biolm}"
 out_dir = f"{options.output_dir_path}/{options.job_name}/{options.representation}/"
 hyperparam = options.hyperparam
 
@@ -139,7 +141,6 @@ config = set_best_hyperparam(config, hyperparam,
     best_hyperparam_value=best_hyperparam
 )
 
-print(config)
 write_config(config, par_dir)
 
 
