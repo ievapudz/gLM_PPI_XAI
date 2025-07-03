@@ -6,7 +6,8 @@
 #   - prepare the parent base.yaml file
 #   - generate all representations needed
 
-JOB_PAR_NAME=$1 # parent job name
+JOB_PAR_NAME=$1 # parent job name (name of the train dataset)
+OUT_JOB_PAR_NAME=$2 # name of the test data set
 DEV_SUBSET="test"
 DATA_PAR_DIR="./data/"
 CONFIGS_PAR_DIR="./configs/"
@@ -38,12 +39,15 @@ matrix_path["MINT"]="./outputs/categorical_jacobians/mint_cosine/"
 
 representation="cosine_fast_categorical_jacobian"
 
+# Making directory and the specific job configuration file
+CONFIGS_DIR="${CONFIGS_PAR_DIR}/${OUT_JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/"
+mkdir -p "${CONFIGS_DIR}"
+
+cp "${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/base.yaml" "${CONFIGS_DIR}/base.yaml"
+
 for biolm in "gLM2" "ESM2" "MINT"; do
-    # Making directory and the specific job configuration file
-    CONFIGS_DIR="${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/"
-    mkdir -p "${CONFIGS_DIR}"
-    
-    sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" "${CONFIGS_DIR}/base.yaml" |\
+    sed "s|OUT_JOB_PAR_NAME|${OUT_JOB_PAR_NAME}|g" "${CONFIGS_DIR}/base.yaml" |\
+        sed "s|JOB_PAR_NAME|${JOB_PAR_NAME}|g" |\
         sed "s|model_path: MODEL_PATH|model_path: ${model_path["${biolm}"]}|" |\
         sed "s|matrix_path: MATRIX_PATH|matrix_path: ${matrix_path["${biolm}"]}|" |\
         sed "s|DEV_SPLIT|${DEV_SUBSET}|" |\
@@ -53,8 +57,8 @@ for biolm in "gLM2" "ESM2" "MINT"; do
         sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/${biolm}.yaml"
     
     echo "Running ${CONFIGS_DIR}/${biolm}.yaml"
-    
-    bash gLM/sbatch_test_CJ.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${representation} ${biolm} 10
+
+    bash gLM/sbatch_test_CJ.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${OUT_JOB_PAR_NAME} ${representation} ${biolm} 10
 
 done
 

@@ -24,6 +24,9 @@ parser.add_option("--output", "-o", dest="output_dir_path",
 parser.add_option("--job-name", "-j", dest="job_name",
 	default=None, help="name of the job.")
 
+parser.add_option("--out-job-name", dest="out_job_name",
+	default=None, help="name of the output job.")
+
 parser.add_option("--representation", "-r", dest="representation",
 	default=None, help="representation of interest.")
 
@@ -94,7 +97,6 @@ def get_best_hyperparams(
     best_candidates = result_df[result_df[metric] == max_metric]
     best_n = best_candidates[param_name].max()
 
-    # TODO: adjust to save the plot
     if plot:
         plt.rcParams['font.size'] = '16'
         plt.figure(figsize=(8, 5))
@@ -127,7 +129,7 @@ def write_config(config, par_dir, biolm, dev_split="test"):
     with open(config_path, 'w') as f:
         yaml.dump(config, f)
     
-par_dir = f"{options.config_dir_path}/{options.job_name}/{options.representation}/"
+par_dir = f"{options.config_dir_path}/{options.out_job_name}/{options.representation}/"
 out_dir = f"{options.output_dir_path}/{options.job_name}/{options.representation}/"
 hyperparam = options.hyperparam
 
