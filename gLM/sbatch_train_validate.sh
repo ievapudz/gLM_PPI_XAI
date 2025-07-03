@@ -27,7 +27,7 @@ export PATH=$HOME/mambaforge/bin:$PATH
 source activate gLM11
 
 srun python3 ./gLM/make_train_validate_config.py -c "${CONFIGS_PAR_DIR}" -o "${OUTPUT_PAR_DIR}" \
-    -j "${JOB_PAR_NAME}" -r "${REPRESENTATION}" -b "${BIOLM}" -f 5 --hyperparam "batch_size"
+    -j "${JOB_PAR_NAME}" -r "${REPRESENTATION}" -b "${BIOLM}" -f 5 --hyperparam "optimizer batch_size"
 
 srun python main.py fit -c ${CONFIGS_PAR_DIR}/${JOB_PAR_NAME}/${REPRESENTATION}/${BIOLM}/train_validate/base.yaml
 
