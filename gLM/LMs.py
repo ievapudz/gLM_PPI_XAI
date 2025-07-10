@@ -235,7 +235,7 @@ class MINT(nn.Module):
 
         return matrix_masked
 
-    def get_logits(self, input_ids, chain_mask=None, fast=True):
+    def get_logits(self, input_ids, chain_mask=None, fast=True, context_idx=None):
         input_ids = input_ids.to(self.device)
         if(self.sep_chains):
             chain_mask = chain_mask.to(self.device)

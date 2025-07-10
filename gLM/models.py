@@ -117,7 +117,7 @@ class CategoricalJacobian(nn.Module):
             masks = proc_masks
             context_idx = [start_idx, end_idx]
 
-        fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.cj_type, context_idx=context_idx)
+        fx_h, fx = self.LM.get_logits(input_ids, chain_mask, fast=self.fast, context_idx=context_idx)
         if(self.distance == "Euclidean"):
             contacts = self.get_euclidean_contacts(fx_h, fx, masks)
         elif(self.distance == "cosine"):
