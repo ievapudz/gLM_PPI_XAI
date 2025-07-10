@@ -33,11 +33,11 @@ model_path["ESM2"]="./esm2_t33_650M_UR50D/"
 model_path["MINT"]="./mint/mint/model/mint.ckpt"
 
 declare -A matrix_path
-matrix_path["gLM2"]="./outputs/categorical_jacobians/glm2_cosine_post250521/"
-matrix_path["ESM2"]="./outputs/categorical_jacobians/esm2_cosine_post250619/"
-matrix_path["MINT"]="./outputs/categorical_jacobians/mint_cosine/"
+matrix_path["gLM2"]="./outputs/categorical_jacobians/glm2_Euclidean/"
+matrix_path["ESM2"]="./outputs/categorical_jacobians/esm2_Euclidean/"
+matrix_path["MINT"]="./outputs/categorical_jacobians/mint_Euclidean/"
 
-representation="cosine_fast_categorical_jacobian"
+representation="Euclidean_fast_categorical_jacobian"
 
 # Making directory and the specific job configuration file
 CONFIGS_DIR="${CONFIGS_PAR_DIR}/${OUT_JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/"
@@ -56,8 +56,6 @@ for biolm in "gLM2" "ESM2" "MINT"; do
         sed "s|BIOLM|${biolm}|g" | \
         sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/${biolm}.yaml"
     
-    echo "Running ${CONFIGS_DIR}/${biolm}.yaml"
-
     bash gLM/sbatch_test_CJ.sh ${CONFIGS_PAR_DIR} ${OUTPUT_PAR_DIR} ${JOB_PAR_NAME} ${OUT_JOB_PAR_NAME} ${representation} ${biolm} 10
 
 done

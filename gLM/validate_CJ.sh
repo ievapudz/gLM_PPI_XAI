@@ -31,11 +31,11 @@ model_path["ESM2"]="./esm2_t33_650M_UR50D/"
 model_path["MINT"]="./mint/mint/model/mint.ckpt"
 
 declare -A matrix_path
-matrix_path["gLM2"]="./outputs/categorical_jacobians/glm2_cosine_post250521/"
-matrix_path["ESM2"]="./outputs/categorical_jacobians/esm2_cosine_post250619/"
-matrix_path["MINT"]="./outputs/categorical_jacobians/mint_cosine/"
+matrix_path["gLM2"]="./outputs/categorical_jacobians/glm2_Euclidean/"
+matrix_path["ESM2"]="./outputs/categorical_jacobians/esm2_Euclidean/"
+matrix_path["MINT"]="./outputs/categorical_jacobians/mint_Euclidean/"
 
-representation="cosine_fast_categorical_jacobian"
+representation="Euclidean_fast_categorical_jacobian"
 
 for n in 3 2 1 0.5 0.25 0.125 0.0625 0.03125; do
     for biolm in "gLM2" "ESM2" "MINT"; do
@@ -51,6 +51,8 @@ for n in 3 2 1 0.5 0.25 0.125 0.0625 0.03125; do
             sed "s|REPRESENTATION|${representation}|g" | sed "s|BIOLM_MODEL|${biolm_model["${biolm}"]}|g" |\
             sed "s|BIOLM|${biolm}|g" | \
             sed "s|concat_type: CONCAT|concat_type: ${concat_type["$biolm"]}|" > "${CONFIGS_DIR}/${biolm}.yaml"
+
+        echo "${CONFIGS_DIR}/${biolm}.yaml"
 
         bash gLM/sbatch_validate_CJ.sh "${JOB_PAR_NAME}/${representation}/${DEV_SUBSET}/n_${n}/${biolm}" \
             "${CONFIGS_DIR}"/${biolm}.yaml 10

@@ -26,10 +26,12 @@ module load CUDA/12.4.0
 export PATH=$HOME/mambaforge/bin:$PATH
 source activate gLM11
 
-srun python3 ./gLM/make_test_config.py -c "${CONFIGS_PAR_DIR}" -o "${LOGS_DIR}" \
+srun python3 ./gLM/make_test_cj_config.py -c "${CONFIGS_PAR_DIR}" -o "${LOGS_DIR}" \
     -j "${JOB_PAR_NAME}" --out-job-name "${OUT_JOB_PAR_NAME}" -r "${REPRESENTATION}" \
-    -b "${BIOLM}" --hyperparam "batch_size optimizer"
+    -b "${BIOLM}" --hyperparam "n"
 
-srun python main.py test -c ${CONFIGS_PAR_DIR}/${OUT_JOB_PAR_NAME}/${REPRESENTATION}/${BIOLM}/test/base.yaml
+echo "Running ${CONFIGS_PAR_DIR}/${OUT_JOB_PAR_NAME}/${REPRESENTATION}/test/${BIOLM}.yaml"
+
+srun python main.py test -c ${CONFIGS_PAR_DIR}/${OUT_JOB_PAR_NAME}/${REPRESENTATION}/test/${BIOLM}.yaml
 
 EOF
