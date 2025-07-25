@@ -1,11 +1,5 @@
 # gLMs + PPI + XAI
 
-## Log into cluster
-
-```
-ssh [username]@login12.scicore.unibas.ch
-```
-
 ## Set up conda environment
 
 ```
