@@ -85,9 +85,9 @@ class MultiCSVDataset(Dataset):
 
 def join_sequences(seqs1, seqs2, is_gLM2=False):
     if(is_gLM2):
-        return ["<+>"+s1 + "<+>"+s2 for s1, s2 in zip(seqs1, seqs2)], [len(s1)+1 for s1 in seqs1]
+        return ["<+>" + s1 + "<+>" + s2 for s1, s2 in zip(seqs1, seqs2)], [len(s1) for s1 in seqs1]
     else:
-        return [s1 + s2 for s1, s2 in zip(seqs1, seqs2)], [len(s1) for s1 in seqs1]
+        return [s1 + "<eos>" + s2 for s1, s2 in zip(seqs1, seqs2)], [len(s1) for s1 in seqs1]
 
 
 def get_task_datasets(task, test_run=False, return_metadata=False):
@@ -215,18 +215,6 @@ def get_task_datasets(task, test_run=False, return_metadata=False):
         method = "mlp"
         output_size = 1
         monitor_metric = "AUPRC"
-    elif task == "PINDER-eubacteria-species-harder-test":
-        train_fl = None 
-        val_fl = None
-        test_fl = "./data/PINDER/eubacteria_5_1024_512_species_harder_test/test.csv"
-        task_type = "bc"
-        col1 = "seq1"
-        col2 = "seq2"
-        target_col = "label"
-        num_epochs = 30
-        method = "mlp"
-        output_size = 1
-        monitor_metric = "AUPRC"
     elif task == "antibody-ranks":
         train_fl = None 
         val_fl = None 
@@ -255,6 +243,42 @@ def get_task_datasets(task, test_run=False, return_metadata=False):
         train_fl = "./data/PINDER/eubacteria_5_1024_512_species_heterodimers/train.csv"
         val_fl = "./data/PINDER/eubacteria_5_1024_512_species_heterodimers/validate.csv"
         test_fl = "./data/PINDER/eubacteria_5_1024_512_species_heterodimers/test.csv"
+        task_type = "bc"
+        col1 = "seq1"
+        col2 = "seq2"
+        target_col = "label"
+        num_epochs = 30
+        method = "mlp"
+        output_size = 1
+        monitor_metric = "AUPRC"
+    elif task == "PINDER-eubacteria-species-heterodimers-leak-free":
+        train_fl = None
+        val_fl = "./data/PINDER/eubacteria_5_1024_512_species_heterodimers_leak_free/val.csv"
+        test_fl = None
+        task_type = "bc"
+        col1 = "seq1"
+        col2 = "seq2"
+        target_col = "label"
+        num_epochs = 30
+        method = "mlp"
+        output_size = 1
+        monitor_metric = "AUPRC"
+    elif task == "PINDER-eubacteria-species-pred-homodimers":
+        train_fl = None
+        val_fl = None
+        test_fl = "./data/PINDER/eubacteria_5_1024_512_species_pred_homodimers/test.csv"
+        task_type = "bc"
+        col1 = "seq1"
+        col2 = "seq2"
+        target_col = "label"
+        num_epochs = 30
+        method = "mlp"
+        output_size = 1
+        monitor_metric = "AUPRC"
+    elif task == "TASmania-Mtuberculosis":
+        train_fl = None
+        val_fl = None 
+        test_fl = "./data/TASmania/mycobacterium_tuberculosis/test.csv"
         task_type = "bc"
         col1 = "seq1"
         col2 = "seq2"

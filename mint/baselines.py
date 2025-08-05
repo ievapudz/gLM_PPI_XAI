@@ -250,8 +250,6 @@ class BioSeqTransformer(ABC):
                 embeds = F.normalize(embeds, p=2, dim=-1)
             encoded_embeds.append(embeds.cpu())
 
-        print(encoded_embeds)
-            
         return torch.cat(encoded_embeds, dim=0)
 
     @torch.no_grad()
@@ -290,6 +288,7 @@ class gLM2(BioSeqTransformer):
 
     MODEL_NAMES = [
         "tattabio/gLM2_650M",
+        "tattabio/gLM2_650M_emb",
     ]
 
     @property
