@@ -6,11 +6,11 @@ model:
             class_path: gLM.models.CategoricalJacobian
             init_args:
                 fast: true
-                matrix_path: ./outputs/categorical_jacobians/glm2_cosine/
+                matrix_path: ./outputs/categorical_jacobians/glm2_cosine_post250521/
                 distance: "cosine"
                 model_path: "./gLM2_650M/"
                 config_path: ""
-                n: 2
+                n: 3
 data:
     class_path: gLM.dataloader.SequencePairCJDataModule
     init_args:
@@ -39,7 +39,6 @@ trainer:
             prefix: 'cosine-fastCJ'
     enable_checkpointing: true
     callbacks:
-      - class_path: gLM.callbacks.SetupWandB 
       - class_path: gLM.callbacks.OutputLoggingCallback
         init_args:
           class_names:
@@ -60,6 +59,7 @@ trainer:
             - roc_auc
             - pr_auc
           log_every_n_steps: 1
+          metric_log_file: logs/CategoricalJacobian/Bernett2022_1k/cosine_fast_categorical_jacobian/test/gLM2/metrics.csv
       - class_path: pytorch_lightning.callbacks.ModelCheckpoint
         init_args:
             dirpath: logs/Bernett2022_1k/gLM2/CJ/
