@@ -7,7 +7,7 @@ data:
     kfold_idx: 0
     kfolds: 5
     num_samples: null
-    num_workers: 4
+    num_workers: 0
     positive_only: false
     pt_folder: /scicore/home/schwede/pudziu0000/data/Bernett2022/embeddings/proteome_input_separate_pooling/ProteomeLM-S/
     seed: 42
