@@ -56,9 +56,3 @@ for representation in "joint_pooling" "separate_pooling" "joint_input_separate_p
         fi
     done
 done
-
-# If dev. subset == test:
-
-# TODO: generate config files for testing (change the run name, add ckpt_path)
-
-# TODO: retrieve testing (point) metrics

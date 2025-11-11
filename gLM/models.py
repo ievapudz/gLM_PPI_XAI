@@ -644,7 +644,7 @@ class PredictorPPI(nn.Module):
     def compute_loss(self, batch):
         loss = torch.nn.functional.binary_cross_entropy(
             batch['predictions'].to(self.device).squeeze().float(),
-            batch['label'].to(self.device).float()
+            batch['label'].to(self.device).squeeze().float()
         )
         return loss
 

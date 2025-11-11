@@ -18,7 +18,7 @@ class EmbeddingsDataset(Dataset):
         pt_file,
         split: str, 
         num_samples: int = None,
-        concat_type: str = "gLM2"
+        concat_type: str = "gLM2" # TODO: to be removed
     ):
 
         self.processor = Processor(None, data_file, concat_type)
@@ -34,6 +34,7 @@ class EmbeddingsDataset(Dataset):
             len(self.data[self.data["label"] == 0]),
         )
         self.embeddings = torch.load(pt_file)
+        self.embeddings = self.embeddings.to(torch.float32)
         self.split = split
 
     def __len__(self):
@@ -56,7 +57,7 @@ class EmbeddingsDataset(Dataset):
 
 class EmbeddingsDataModule(LightningDataModule):
     """
-    LightningDataModule for SequencePairDataset
+    LightningDataModule for EmbeddingsDataset
     """
 
     def __init__(

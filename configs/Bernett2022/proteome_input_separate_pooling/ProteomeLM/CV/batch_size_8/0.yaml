@@ -1,0 +1,80 @@
+data:
+  class_path: gLM.dataloader.EmbeddingsDataModule
+  init_args:
+    batch_size: '8'
+    concat_type: ProteomeLM
+    data_folder: ./data/Bernett2022/
+    kfold_idx: 0
+    kfolds: 5
+    num_samples: null
+    num_workers: 4
+    positive_only: false
+    pt_folder: /scicore/home/schwede/pudziu0000/data/Bernett2022/embeddings/proteome_input_separate_pooling/ProteomeLM-S/
+    seed: 42
+model:
+  class_path: gLM.models.gLM2
+  init_args:
+    model:
+      class_path: gLM.models.PredictorPPI
+      init_args:
+        emb_dim: 2304
+        hid_size: 640
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    betas:
+    - 0.9
+    - 0.98
+    lr: 0.00001
+    weight_decay: 0.001
+seed_everything: 42
+trainer:
+  accumulate_grad_batches: 1
+  callbacks:
+  - class_path: pytorch_lightning.callbacks.EarlyStopping
+    init_args:
+      mode: min
+      monitor: validate/loss
+      patience: 5
+  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: logs/gLM.models.PredictorPPI/Bernett2022/proteome_input_separate_pooling/ProteomeLM/CV/batch_size_8/0/checkpoints/
+      filename: model-{epoch}
+      mode: min
+      monitor: validate/loss
+      save_last: true
+      save_top_k: 1
+  - class_path: gLM.callbacks.OutputLoggingCallback
+    init_args:
+      class_names:
+      - Negative
+      - Positive
+      invert_probabilities: false
+      log_every_n_steps: 1
+      make_correct_dim: true
+      make_one_hot: true
+      metric_log_file: logs/gLM.models.PredictorPPI/Bernett2022/proteome_input_separate_pooling/ProteomeLM/CV/batch_size_8/0/metrics.csv
+      metrics_to_plot:
+      - confusion_matrix
+      - class_proportions
+      - calibration_curves
+      - classification_report
+      - mcc
+      - roc_auc
+      - pr_auc
+      y_pred_key: predictions
+      y_pred_lab_key: predicted_label
+      y_true_lab_key: label
+  deterministic: true
+  enable_checkpointing: true
+  log_every_n_steps: 1
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      log_model: false
+      name: Bernett2022/proteome_input_separate_pooling/ProteomeLM/CV/batch_size_8/0/
+      offline: true
+      prefix: CV/batch_size_8/
+      project: gLM_PPI_XAI
+      save_dir: logs/gLM.models.PredictorPPI/Bernett2022/proteome_input_separate_pooling/ProteomeLM/CV/batch_size_8/0/
+  max_epochs: 100
