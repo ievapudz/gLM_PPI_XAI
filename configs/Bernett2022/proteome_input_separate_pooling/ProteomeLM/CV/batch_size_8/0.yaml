@@ -3,13 +3,13 @@ data:
   init_args:
     batch_size: '8'
     concat_type: ProteomeLM
-    data_folder: ./data/Bernett2022/
+    data_folder: /scicore/home/schwede/pudziu0000/data/Bernett2022/CV/0/
     kfold_idx: 0
     kfolds: 5
     num_samples: null
     num_workers: 0
     positive_only: false
-    pt_folder: /scicore/home/schwede/pudziu0000/data/Bernett2022/embeddings/proteome_input_separate_pooling/ProteomeLM-S/
+    pt_folder: /scicore/home/schwede/pudziu0000/data/Bernett2022/embeddings/proteome_input_separate_pooling/ProteomeLM-S/CV/0/
     seed: 42
 model:
   class_path: gLM.models.gLM2
@@ -77,4 +77,4 @@ trainer:
       prefix: CV/batch_size_8/
       project: gLM_PPI_XAI
       save_dir: logs/gLM.models.PredictorPPI/Bernett2022/proteome_input_separate_pooling/ProteomeLM/CV/batch_size_8/0/
-  max_epochs: 100
+  max_epochs: 1000
