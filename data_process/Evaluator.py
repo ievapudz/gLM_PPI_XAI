@@ -4,6 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glob import glob
 import matplotlib as mpl
+from pathlib import Path
+import numpy as np
 
 class Evaluator:
     def __init__(self, base_dir, representations, biolms, dev_stage, num_folds, 
@@ -24,6 +26,7 @@ class Evaluator:
             self.out_dir = f"{out_dir}/{hyperparam}_{hyperparam_value}/{dev_stage}/"
         else:
             self.out_dir = f"{out_dir}/{dev_stage}/"
+        print(self.out_dir)
     
     def initialise_df(self):
         representation_col = []
@@ -76,7 +79,8 @@ class Evaluator:
                     # Define paths
                     fold_path = f"{self.base_dir}/{representation}/{biolm}/{fold_num}"
                     ckpt_path = glob(f"{fold_path}/checkpoints/model-epoch=*.ckpt")
-            
+                    print(fold_path)
+                    
                     if not ckpt_path:
                         print(f"No checkpoint found for {representation}/{biolm}, fold {fold_num}")
                         continue
@@ -178,5 +182,168 @@ class Evaluator:
                 self.plot_stats(means, stderrs, labels, metric_of_interest)
         
         df.to_csv(f"{self.out_dir}/metrics.csv", index=False)
-        
-        
+
+class EvaluatorCV:
+    """
+    Evaluates cross-validation experiments stored in:
+    logs/.../CV/<experiment_id>/<fold_id>/metrics.csv
+
+    For each experiment:
+        - Loads metrics.csv per fold
+        - Aggregates mean/median/std per epoch
+        - Allows plotting
+    """
+
+    def __init__(self, base_dir="logs"):
+        self.base_dir = base_dir
+        self.experiments = {}          # experiment_id -> list of folds (paths)
+        self.metrics_raw = {}          # experiment_id -> raw concatenated metrics
+        self.metrics_agg = {}          # experiment_id -> aggregated metrics
+        self._discover_experiments()
+
+    # -------------------------------------------------------------
+
+    def _discover_experiments(self):
+        """Discover CV experiment folders under base_dir."""
+        exp_paths = glob(f"{self.base_dir}/**/CV/*/", recursive=True)
+        for p in exp_paths:
+            exp_id = Path(p).name
+            self.experiments[exp_id] = sorted(glob(f"{p}/*/metrics.csv"))
+
+        print(f"Discovered {len(self.experiments)} experiments.")
+
+    def _aggregate_with_stderr(self, exp_id, metric):
+        """
+        NB.
+        For a given experiment:
+            - aggregate per-fold metrics per epoch
+            - compute mean, std, stderr
+            - compute score = mean - stderr
+        Returns a DataFrame indexed by epoch with these columns.
+        """
+    
+        if exp_id not in self.metrics_raw:
+            self.load_experiment(exp_id)
+    
+        df = self.metrics_raw[exp_id]
+    
+        folds = df["fold"].nunique()
+    
+        # Group by epoch
+        grouped = df.groupby("epoch")[metric]
+    
+        mean = grouped.mean()
+        std = grouped.std()
+        stderr = std / np.sqrt(folds)
+        score = mean - stderr
+    
+        out = pd.DataFrame({
+            "mean": mean,
+            "std": std,
+            "stderr": stderr,
+            "score": score
+        })
+    
+        return out
+    
+    # -------------------------------------------------------------
+
+    def load_experiment(self, exp_id):
+        """Load all folds for a given experiment ID."""
+        if exp_id not in self.experiments:
+            raise ValueError(f"Experiment {exp_id} not found.")
+
+        fold_files = self.experiments[exp_id]
+        if len(fold_files) == 0:
+            raise ValueError(f"No metrics.csv files found for experiment {exp_id}.")
+
+        dfs = []
+        for f in fold_files:
+            fold_id = Path(f).parent.name
+            df = pd.read_csv(f)
+            df["fold"] = fold_id
+            dfs.append(df)
+
+        df_all = pd.concat(dfs, ignore_index=True)
+        self.metrics_raw[exp_id] = df_all
+        return df_all
+
+    def plot_performance_per_epoch(self, exp_id, metric):
+        """
+        NB.
+        Choice of the best epoch for the experiment over the folds.
+        """
+        agg = self._aggregate_with_stderr(exp_id, metric)
+        best_epoch = agg["score"].idxmax()
+    
+        plt.figure(figsize=(10,5))
+        plt.plot(agg.index, agg["mean"], label="mean")
+        plt.fill_between(
+            agg.index,
+            agg["mean"] - agg["stderr"],
+            agg["mean"] + agg["stderr"],
+            alpha=0.2,
+            label="mean ± stderr"
+        )
+        plt.plot(agg.index, agg["score"], label="mean - stderr", linestyle="--")
+        plt.axvline(best_epoch, color="red", linestyle=":", label=f"best epoch={best_epoch}")
+        plt.xlabel("Epoch")
+        plt.ylabel(metric)
+        plt.title(f"{exp_id}: {metric} (uncertainty-penalized selection)")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+    
+    def get_best_epoch(self, exp_id, metric):
+        """
+        NB.
+        Returns the epoch that maximizes:
+            score(epoch) = mean(epoch) - stderr(epoch)
+        """
+    
+        agg = self._aggregate_with_stderr(exp_id, metric)
+        best_epoch = agg["score"].idxmax()
+        return int(best_epoch)
+    
+    # -------------------------------------------------------------
+
+    def aggregate(self, metric):
+        """
+        Compute mean/std/stderr/score for each experiment.
+        Stores results in self.metrics_uncertainty[exp_id].
+        """
+        self.metrics_uncertainty = {}
+        for exp in self.experiments:
+            self.metrics_uncertainty[exp] = self._aggregate_with_stderr(exp, metric)
+        return self.metrics_uncertainty
+
+    def rank_experiments(self, metric, epoch="final", mode="max"):
+        """
+        Ranks experiments by a metric at a given epoch:
+        - epoch="final" means the last available epoch
+        - epoch="best" means the best epoch over the folds for each experiment
+        - epoch=int for specific epoch
+        mode="max" or "min"
+        """
+        scores = {}
+
+        for exp_id, agg in self.metrics_uncertainty.items():
+            col = f"mean"
+            if col not in agg:
+                continue
+
+            if(epoch == "best"):
+                e = self.get_best_epoch(exp_id, metric)
+            elif(epoch == "final"):
+                e = agg.index[-1]
+            else:
+                e = epoch
+            
+            if e in agg.index:
+                scores[exp_id] = agg.loc[e, col]
+
+        reverse = (mode == "max")
+        return sorted(scores.items(), key=lambda x: x[1], reverse=reverse)
+
+
